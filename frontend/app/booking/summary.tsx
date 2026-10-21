@@ -1,4 +1,3 @@
-import { Text } from 'react-native'; export default function S() { return <Text>screen</Text>; }
 import { useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
