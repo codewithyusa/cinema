@@ -23,10 +23,13 @@ export async function getTickets(email: string): Promise<SavedTicket[]> {
   }
 }
 
-export async function saveTicket(email: string, ticket: SavedTicket) {
+export async function saveTicket(email: string, ticket: SavedTicket): Promise<boolean> {
   try {
     const all = await getTickets(email);
-    if (all.some((t) => t.code === ticket.code)) return;
+    if (all.some((t) => t.code === ticket.code)) return false;
     await AsyncStorage.setItem(keyFor(email), JSON.stringify([ticket, ...all]));
-  } catch {}
+    return true;
+  } catch {
+    return false;
+  }
 }
