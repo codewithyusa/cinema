@@ -1,11 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../../src/theme/colors';
 import { getMovie } from '../../src/api/movies';
 import { getWatchlist, toggleWatchlist } from '../../src/store/watchlist';
+import { getReviews } from '../../src/store/reviews';
 import { useAuth } from '../../src/store/authStore';
 
 export default function MovieDetails() {
@@ -15,10 +16,24 @@ export default function MovieDetails() {
   const { user } = useAuth();
   const movie: any = getMovie(id);
   const [saved, setSaved] = useState(false);
+  const [reviewCount, setReviewCount] = useState(0);
+  const [average, setAverage] = useState<string | null>(null);
 
   useEffect(() => {
     if (user && id) getWatchlist(user.email).then((list) => setSaved(list.includes(id)));
   }, [user?.email, id]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!id) return;
+      getReviews(id).then((list) => {
+        setReviewCount(list.length);
+        setAverage(
+          list.length ? (list.reduce((sum, r) => sum + r.rating, 0) / list.length).toFixed(1) : null
+        );
+      });
+    }, [id])
+  );
 
   const toggleSaved = async () => {
     if (!user || !id) return;
@@ -79,6 +94,31 @@ export default function MovieDetails() {
           <Text style={{ color: colors.muted, fontSize: 14, lineHeight: 22 }}>
             {movie.description ?? movie.overview ?? 'No description available yet.'}
           </Text>
+
+          <Pressable
+            onPress={() => router.push(`/review/${id}`)}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 12,
+              height: 60,
+              marginTop: 8,
+              borderRadius: 18,
+              backgroundColor: colors.surface,
+              paddingHorizontal: 16,
+            }}
+          >
+            <Ionicons name="chatbubble-ellipses-outline" size={20} color={colors.text} />
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: colors.text, fontSize: 15, fontWeight: '700' }}>Reviews</Text>
+              <Text style={{ color: colors.muted, fontSize: 12 }}>
+                {reviewCount === 0
+                  ? 'No reviews yet. Write the first one'
+                  : `${reviewCount} review${reviewCount === 1 ? '' : 's'}${average ? ` · ${average} average` : ''}`}
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.muted} />
+          </Pressable>
         </View>
       </ScrollView>
 
