@@ -55,7 +55,9 @@ export default function Profile() {
         </View>
 
         <View style={{ backgroundColor: colors.surface, borderRadius: 18, paddingHorizontal: 14 }}>
-          <MenuItem icon="ticket-outline" label="My tickets" onPress={() => router.push('/tickets')} last />
+          <MenuItem icon="ticket-outline" label="My tickets" onPress={() => router.push('/tickets')} />
+          <MenuItem icon="notifications-outline" label="Notifications" onPress={() => router.push('/notifications')} />
+          <MenuItem icon="settings-outline" label="Settings" onPress={() => router.push('/settings')} last />
         </View>
 
         <Pressable
