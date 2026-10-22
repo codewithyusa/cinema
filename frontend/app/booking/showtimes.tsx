@@ -6,19 +6,31 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../../src/theme/colors';
 import { getMovie } from '../../src/api/movies';
 
-const days = [
-  { day: 'Wed', date: '21' },
-  { day: 'Thu', date: '22' },
-  { day: 'Fri', date: '23' },
-  { day: 'Sat', date: '24' },
-  { day: 'Sun', date: '25' },
-];
+const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+const days = Array.from({ length: 5 }, (_, i) => {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() + i);
+  return { full: d, day: dayNames[d.getDay()], date: String(d.getDate()), month: monthNames[d.getMonth()] };
+});
 
 const cinemas = [
   { name: 'Cinemo Central', distance: '1.2 km', tags: ['IMAX', '2D'], times: ['4:30 PM', '7:30 PM', '10:15 PM'] },
   { name: 'Cinemo Riverside', distance: '3.8 km', tags: ['2D'], times: ['5:00 PM', '8:00 PM'] },
   { name: 'Cinemo Mall', distance: '6.1 km', tags: ['VIP', '2D'], times: ['6:15 PM', '9:00 PM'] },
 ];
+
+function hasPassed(day: Date, time: string) {
+  const m = time.match(/(\d+):(\d+)\s*(AM|PM)/i);
+  if (!m) return false;
+  let hour = Number(m[1]) % 12;
+  if (m[3].toUpperCase() === 'PM') hour += 12;
+  const show = new Date(day);
+  show.setHours(hour, Number(m[2]), 0, 0);
+  return show.getTime() <= Date.now();
+}
 
 export default function Showtimes() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -30,7 +42,12 @@ export default function Showtimes() {
   const pick = (cinema: string, time: string) =>
     router.push({
       pathname: '/booking/seats',
-      params: { id, cinema, time, date: `${days[selected].day} ${days[selected].date} Oct` },
+      params: {
+        id,
+        cinema,
+        time,
+        date: `${days[selected].day} ${days[selected].date} ${days[selected].month}`,
+      },
     });
 
   return (
@@ -59,7 +76,7 @@ export default function Showtimes() {
         <View style={{ flexDirection: 'row', gap: 10 }}>
           {days.map((d, i) => (
             <Pressable
-              key={d.date}
+              key={`${d.month}-${d.date}`}
               onPress={() => setSelected(i)}
               style={{
                 width: 58,
@@ -96,26 +113,23 @@ export default function Showtimes() {
               </View>
             </View>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-              {c.times.map((t) => (
-                <Pressable
-                  key={t}
-                  onPress={() => pick(c.name, t)}
-                  style={{
-                    height: 40,
-                    paddingHorizontal: 14,
-                    borderRadius: 10,
-                    borderWidth: 1,
-                    borderColor: colors.red,
-                    justifyContent: 'center',
-                  }}
-                >
-                  <Text style={{ color: colors.redText, fontSize: 13, fontWeight: '700' }}>{t}</Text>
-                </Pressable>
-              ))}
-            </View>
-          </View>
-        ))}
-      </ScrollView>
-    </View>
-  );
-}
+              {c.times.map((t) => {
+                const past = hasPassed(days[selected].full, t);
+                return (
+                  <Pressable
+                    key={t}
+                    disabled={past}
+                    onPress={() => pick(c.name, t)}
+                    style={{
+                      height: 40,
+                      paddingHorizontal: 14,
+                      borderRadius: 10,
+                      borderWidth: 1,
+                      borderColor: past ? colors.border : colors.red,
+                      opacity: past ? 0.4 : 1,
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color: past ? colors.muted : colors.redText,
