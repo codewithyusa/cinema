@@ -7,6 +7,7 @@ import QRCode from 'react-native-qrcode-svg';
 import { colors } from '../../src/theme/colors';
 import { getMovie } from '../../src/api/movies';
 import { saveTicket } from '../../src/store/tickets';
+import { useAuth } from '../../src/store/authStore';
 
 const methodNames: Record<string, string> = {
   telebirr: 'Telebirr',
@@ -26,14 +27,15 @@ export default function Ticket() {
   }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { user } = useAuth();
   const movie = getMovie(id);
 
   const bookingCode = `YC-${id}-${(seats ?? '').replace(/,/g, '')}-${(time ?? '').replace(/\D/g, '')}`;
   const qrValue = JSON.stringify({ code: bookingCode, movie: id, cinema, date, time, seats });
 
   useEffect(() => {
-    if (!id || !seats) return;
-    saveTicket({
+    if (!user || !id || !seats) return;
+    saveTicket(user.email, {
       code: bookingCode,
       id,
       cinema: cinema ?? '',
@@ -44,7 +46,7 @@ export default function Ticket() {
       method: method ?? '',
       createdAt: Date.now(),
     });
-  }, [bookingCode]);
+  }, [bookingCode, user?.email]);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg, paddingTop: insets.top + 12 }}>
@@ -87,7 +89,7 @@ export default function Ticket() {
 
       <View style={{ padding: 20, paddingBottom: insets.bottom + 20 }}>
         <Pressable
-          onPress={() => router.replace('/')}
+          onPress={() => router.replace('/home')}
           style={{ height: 52, borderRadius: 14, backgroundColor: colors.red, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8 }}
         >
           <Ionicons name="home-outline" size={18} color="#fff" />
