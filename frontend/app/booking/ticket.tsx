@@ -7,6 +7,7 @@ import QRCode from 'react-native-qrcode-svg';
 import { colors } from '../../src/theme/colors';
 import { getMovie } from '../../src/api/movies';
 import { saveTicket } from '../../src/store/tickets';
+import { notifyBooking } from '../../src/store/notifications';
 import { useAuth } from '../../src/store/authStore';
 
 const methodNames: Record<string, string> = {
@@ -45,6 +46,16 @@ export default function Ticket() {
       total: total ?? '0',
       method: method ?? '',
       createdAt: Date.now(),
+    }).then((isNew) => {
+      if (isNew) {
+        notifyBooking(user.email, {
+          movie: movie?.title ?? 'Your movie',
+          cinema: cinema ?? '',
+          date: date ?? '',
+          time: time ?? '',
+          seats: seats.split(',').join(', '),
+        });
+      }
     });
   }, [bookingCode, user?.email]);
 
