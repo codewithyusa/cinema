@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -5,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import QRCode from 'react-native-qrcode-svg';
 import { colors } from '../../src/theme/colors';
 import { getMovie } from '../../src/api/movies';
+import { saveTicket } from '../../src/store/tickets';
 
 const methodNames: Record<string, string> = {
   telebirr: 'Telebirr',
@@ -29,11 +31,26 @@ export default function Ticket() {
   const bookingCode = `YC-${id}-${(seats ?? '').replace(/,/g, '')}-${(time ?? '').replace(/\D/g, '')}`;
   const qrValue = JSON.stringify({ code: bookingCode, movie: id, cinema, date, time, seats });
 
+  useEffect(() => {
+    if (!id || !seats) return;
+    saveTicket({
+      code: bookingCode,
+      id,
+      cinema: cinema ?? '',
+      date: date ?? '',
+      time: time ?? '',
+      seats,
+      total: total ?? '0',
+      method: method ?? '',
+      createdAt: Date.now(),
+    });
+  }, [bookingCode]);
+
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg, paddingTop: insets.top + 12 }}>
       <View style={{ paddingHorizontal: 20 }}>
         <Text style={{ color: colors.text, fontSize: 20, fontWeight: '800' }}>Your ticket</Text>
-        <Text style={{ color: colors.muted, fontSize: 13, marginTop: 4 }}>Payment successful</Text>
+        <Text style={{ color: colors.muted, fontSize: 13, marginTop: 4 }}>Saved on your phone</Text>
       </View>
 
       <ScrollView contentContainerStyle={{ padding: 20, gap: 16 }}>
