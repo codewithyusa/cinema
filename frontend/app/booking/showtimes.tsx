@@ -32,6 +32,32 @@ function hasPassed(day: Date, time: string) {
   return show.getTime() <= Date.now();
 }
 
+function TimeChip({ time, past, onPress }: { time: string; past: boolean; onPress: () => void }) {
+  const borderColor = past ? colors.border : colors.red;
+  const textColor = past ? colors.muted : colors.redText;
+  const decoration = past ? 'line-through' : 'none';
+
+  return (
+    <Pressable
+      disabled={past}
+      onPress={onPress}
+      style={{
+        height: 40,
+        paddingHorizontal: 14,
+        borderRadius: 10,
+        borderWidth: 1,
+        borderColor: borderColor,
+        opacity: past ? 0.4 : 1,
+        justifyContent: 'center',
+      }}
+    >
+      <Text style={{ color: textColor, fontSize: 13, fontWeight: '700', textDecorationLine: decoration }}>
+        {time}
+      </Text>
+    </Pressable>
+  );
+}
+
 export default function Showtimes() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
@@ -113,23 +139,18 @@ export default function Showtimes() {
               </View>
             </View>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-              {c.times.map((t) => {
-                const past = hasPassed(days[selected].full, t);
-                return (
-                  <Pressable
-                    key={t}
-                    disabled={past}
-                    onPress={() => pick(c.name, t)}
-                    style={{
-                      height: 40,
-                      paddingHorizontal: 14,
-                      borderRadius: 10,
-                      borderWidth: 1,
-                      borderColor: past ? colors.border : colors.red,
-                      opacity: past ? 0.4 : 1,
-                      justifyContent: 'center',
-                    }}
-                  >
-                    <Text
-                      style={{
-                        color: past ? colors.muted : colors.redText,
+              {c.times.map((t) => (
+                <TimeChip
+                  key={t}
+                  time={t}
+                  past={hasPassed(days[selected].full, t)}
+                  onPress={() => pick(c.name, t)}
+                />
+              ))}
+            </View>
+          </View>
+        ))}
+      </ScrollView>
+    </View>
+  );
+}
