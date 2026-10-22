@@ -1,5 +1,5 @@
 import { Tabs } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons } from '../../src/components/Icon';
 import { colors } from '../../src/theme/colors';
 
 const icon = (name: keyof typeof Ionicons.glyphMap) =>
