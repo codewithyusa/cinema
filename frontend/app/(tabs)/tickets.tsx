@@ -6,16 +6,19 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../../src/theme/colors';
 import { getMovie } from '../../src/api/movies';
 import { getTickets, SavedTicket } from '../../src/store/tickets';
+import { useAuth } from '../../src/store/authStore';
 
 export default function Tickets() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { user } = useAuth();
   const [tickets, setTickets] = useState<SavedTicket[]>([]);
 
   useFocusEffect(
     useCallback(() => {
-      getTickets().then(setTickets);
-    }, [])
+      if (user) getTickets(user.email).then(setTickets);
+      else setTickets([]);
+    }, [user?.email])
   );
 
   return (
