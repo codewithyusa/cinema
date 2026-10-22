@@ -28,7 +28,12 @@ export async function getInbox(email: string): Promise<InboxItem[]> {
 
 async function addToInbox(email: string, title: string, body: string) {
   const all = await getInbox(email);
-  const item = { id: String(Date.now()), title, body, createdAt: Date.now() };
+  const item: InboxItem = {
+    id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    title,
+    body,
+    createdAt: Date.now(),
+  };
   try {
     await AsyncStorage.setItem(keyFor(email), JSON.stringify([item, ...all]));
   } catch {}
