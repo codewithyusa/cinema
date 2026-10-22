@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
+import { getSettings } from './settings';
 
 export type InboxItem = { id: string; title: string; body: string; createdAt: number };
 
@@ -76,28 +77,29 @@ export async function notifyBooking(
   const confirmBody = `${info.movie} at ${info.cinema}, ${info.date} ${info.time}. Seats ${info.seats}.`;
   await addToInbox(email, confirmTitle, confirmBody);
 
+  const settings = await getSettings();
   const when = showDate(info.date, info.time);
   const remindAt = when ? new Date(when.getTime() - 60 * 60 * 1000) : null;
-  const canRemind = remindAt && remindAt.getTime() > Date.now();
+  const canRemind = settings.reminders && remindAt !== null && remindAt.getTime() > Date.now();
 
   if (canRemind) {
     await addToInbox(email, 'Reminder set', `We will remind you 1 hour before ${info.movie}.`);
   }
 
-  if (!(await allowed())) return;
+  if (!settings.notifications || !(await allowed())) return;
 
   await Notifications.scheduleNotificationAsync({
     content: { title: confirmTitle, body: confirmBody },
     trigger: null,
   });
 
-  if (canRemind) {
+  if (canRemind && remindAt) {
     await Notifications.scheduleNotificationAsync({
       content: {
         title: `${info.movie} starts in 1 hour`,
         body: `${info.cinema}, ${info.time}. Seats ${info.seats}. Have your QR code ready.`,
       },
-      trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: remindAt! },
+      trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: remindAt },
     });
   }
 }
