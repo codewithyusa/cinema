@@ -39,8 +39,11 @@ export default function Notifications() {
         </View>
       ) : (
         <ScrollView contentContainerStyle={{ padding: 20, gap: 12 }}>
-          {items.map((n) => (
-            <View key={n.id} style={{ flexDirection: 'row', gap: 14, backgroundColor: colors.surface, borderRadius: 18, padding: 14 }}>
+          {items.map((n, i) => (
+            <View
+              key={`${n.id}-${i}`}
+              style={{ flexDirection: 'row', gap: 14, backgroundColor: colors.surface, borderRadius: 18, padding: 14 }}
+            >
               <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center' }}>
                 <Ionicons name="notifications" size={20} color={colors.red} />
               </View>
