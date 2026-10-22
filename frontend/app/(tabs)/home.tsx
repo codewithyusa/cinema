@@ -1,5 +1,6 @@
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../../src/theme/colors';
 import { getMovies } from '../../src/api/movies';
@@ -16,9 +17,31 @@ export default function Home() {
       style={{ flex: 1, backgroundColor: colors.bg }}
       contentContainerStyle={{ paddingTop: insets.top + 16, paddingBottom: 32, gap: 24 }}
     >
-      <View style={{ paddingHorizontal: 20 }}>
-        <Text style={{ color: colors.muted, fontSize: 14 }}>Good evening</Text>
-        <Text style={{ color: colors.text, fontSize: 26, fontWeight: '800' }}>What are we watching?</Text>
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          paddingHorizontal: 20,
+        }}
+      >
+        <View>
+          <Text style={{ color: colors.muted, fontSize: 14 }}>Good evening</Text>
+          <Text style={{ color: colors.text, fontSize: 26, fontWeight: '800' }}>What are we watching?</Text>
+        </View>
+        <Pressable
+          onPress={() => router.push('/notifications')}
+          style={{
+            width: 44,
+            height: 44,
+            borderRadius: 14,
+            backgroundColor: colors.surface,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <Ionicons name="notifications-outline" size={22} color={colors.text} />
+        </Pressable>
       </View>
 
       <Pressable
