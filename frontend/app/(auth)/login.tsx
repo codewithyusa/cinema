@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { colors } from '../../src/theme/colors';
@@ -15,6 +16,22 @@ const input = {
 
 export default function Login() {
   const router = useRouter();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+
+  const submit = () => {
+    if (!/^\S+@\S+\.\S+$/.test(email.trim())) {
+      setError('Enter a valid email address.');
+      return;
+    }
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters.');
+      return;
+    }
+    setError('');
+    router.push({ pathname: '/verify', params: { email: email.trim() } });
+  };
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg, padding: 24, paddingTop: 72, gap: 20 }}>
@@ -33,6 +50,8 @@ export default function Login() {
           placeholderTextColor={colors.muted}
           autoCapitalize="none"
           keyboardType="email-address"
+          value={email}
+          onChangeText={setEmail}
         />
       </View>
 
@@ -43,11 +62,15 @@ export default function Login() {
           placeholder="Enter password"
           placeholderTextColor={colors.muted}
           secureTextEntry
+          value={password}
+          onChangeText={setPassword}
         />
       </View>
 
+      {error ? <Text style={{ color: colors.redText, fontSize: 13 }}>{error}</Text> : null}
+
       <Pressable
-        onPress={() => router.push('/verify')}
+        onPress={submit}
         style={{
           height: 52,
           borderRadius: 14,
