@@ -12,21 +12,21 @@ export type SavedTicket = {
   createdAt: number;
 };
 
-const KEY = 'yusa_tickets';
+const keyFor = (email: string) => `yusa_tickets_${email}`;
 
-export async function getTickets(): Promise<SavedTicket[]> {
+export async function getTickets(email: string): Promise<SavedTicket[]> {
   try {
-    const raw = await AsyncStorage.getItem(KEY);
+    const raw = await AsyncStorage.getItem(keyFor(email));
     return raw ? JSON.parse(raw) : [];
   } catch {
     return [];
   }
 }
 
-export async function saveTicket(ticket: SavedTicket) {
+export async function saveTicket(email: string, ticket: SavedTicket) {
   try {
-    const all = await getTickets();
+    const all = await getTickets(email);
     if (all.some((t) => t.code === ticket.code)) return;
-    await AsyncStorage.setItem(KEY, JSON.stringify([ticket, ...all]));
+    await AsyncStorage.setItem(keyFor(email), JSON.stringify([ticket, ...all]));
   } catch {}
 }
