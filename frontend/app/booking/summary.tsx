@@ -5,6 +5,7 @@ import { Ionicons } from '../../src/components/Icon';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../../src/theme/colors';
 import { getMovie } from '../../src/api/movies';
+import Poster from '../../src/components/Poster';
 
 const FEE = 1.5;
 
@@ -50,7 +51,7 @@ export default function Summary() {
 
       <ScrollView contentContainerStyle={{ padding: 20, gap: 16 }}>
         <View style={{ flexDirection: 'row', gap: 14, backgroundColor: colors.surface, borderRadius: 18, padding: 14 }}>
-          <View style={{ width: 56, height: 80, borderRadius: 10, backgroundColor: movie?.color ?? colors.border }} />
+          <Poster movie={movie} style={{ width: 56, height: 80, borderRadius: 10 }} />
           <View style={{ flex: 1, justifyContent: 'center', gap: 3 }}>
             <Text style={{ color: colors.text, fontSize: 16, fontWeight: '800' }}>{movie?.title}</Text>
             <Text style={{ color: colors.muted, fontSize: 13 }}>{cinema}</Text>
