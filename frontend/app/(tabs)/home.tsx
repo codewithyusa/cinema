@@ -6,6 +6,13 @@ import { colors } from '../../src/theme/colors';
 import { getMovies } from '../../src/api/movies';
 import MovieCard from '../../src/components/MovieCard';
 
+function greeting() {
+  const hour = new Date().getHours();
+  if (hour < 12) return 'Good morning';
+  if (hour < 18) return 'Good afternoon';
+  return 'Good evening';
+}
+
 export default function Home() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -26,7 +33,7 @@ export default function Home() {
         }}
       >
         <View>
-          <Text style={{ color: colors.muted, fontSize: 14 }}>Good evening</Text>
+          <Text style={{ color: colors.muted, fontSize: 14 }}>{greeting()}</Text>
           <Text style={{ color: colors.text, fontSize: 26, fontWeight: '800' }}>What are we watching?</Text>
         </View>
         <Pressable
