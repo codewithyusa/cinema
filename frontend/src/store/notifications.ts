@@ -1,21 +1,35 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 import { getSettings } from './settings';
 
 export type InboxItem = { id: string; title: string; body: string; createdAt: number };
 
+type NotificationsModule = typeof import('expo-notifications');
+
 const keyFor = (email: string) => `yusa_inbox_${email}`;
 
-if (Platform.OS !== 'web') {
-  Notifications.setNotificationHandler({
-    handleNotification: async () => ({
-      shouldShowBanner: true,
-      shouldShowList: true,
-      shouldPlaySound: true,
-      shouldSetBadge: false,
-    }),
-  });
+let cached: NotificationsModule | null | undefined;
+
+// Loads expo-notifications only when it is first needed.
+// If the phone app does not include it (Expo Go on Android), we skip pop-ups and nothing crashes.
+function loadNotifications(): NotificationsModule | null {
+  if (Platform.OS === 'web') return null;
+  if (cached !== undefined) return cached;
+  try {
+    const mod = require('expo-notifications') as NotificationsModule;
+    mod.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowBanner: true,
+        shouldShowList: true,
+        shouldPlaySound: true,
+        shouldSetBadge: false,
+      }),
+    });
+    cached = mod;
+  } catch {
+    cached = null;
+  }
+  return cached;
 }
 
 export async function getInbox(email: string): Promise<InboxItem[]> {
@@ -40,18 +54,21 @@ async function addToInbox(email: string, title: string, body: string) {
   } catch {}
 }
 
-async function allowed() {
-  if (Platform.OS === 'web') return false;
-  if (Platform.OS === 'android') {
-    await Notifications.setNotificationChannelAsync('default', {
-      name: 'default',
-      importance: Notifications.AndroidImportance.MAX,
-    });
+async function allowed(N: NotificationsModule) {
+  try {
+    if (Platform.OS === 'android') {
+      await N.setNotificationChannelAsync('default', {
+        name: 'default',
+        importance: N.AndroidImportance.MAX,
+      });
+    }
+    const current = await N.getPermissionsAsync();
+    if (current.granted) return true;
+    const asked = await N.requestPermissionsAsync();
+    return asked.granted;
+  } catch {
+    return false;
   }
-  const current = await Notifications.getPermissionsAsync();
-  if (current.granted) return true;
-  const asked = await Notifications.requestPermissionsAsync();
-  return asked.granted;
 }
 
 const months: Record<string, number> = {
@@ -86,20 +103,25 @@ export async function notifyBooking(
     await addToInbox(email, 'Reminder set', `We will remind you 1 hour before ${info.movie}.`);
   }
 
-  if (!settings.notifications || !(await allowed())) return;
+  if (!settings.notifications) return;
 
-  await Notifications.scheduleNotificationAsync({
-    content: { title: confirmTitle, body: confirmBody },
-    trigger: null,
-  });
+  const N = loadNotifications();
+  if (!N || !(await allowed(N))) return;
 
-  if (canRemind && remindAt) {
-    await Notifications.scheduleNotificationAsync({
-      content: {
-        title: `${info.movie} starts in 1 hour`,
-        body: `${info.cinema}, ${info.time}. Seats ${info.seats}. Have your QR code ready.`,
-      },
-      trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: remindAt },
+  try {
+    await N.scheduleNotificationAsync({
+      content: { title: confirmTitle, body: confirmBody },
+      trigger: null,
     });
-  }
+
+    if (canRemind && remindAt) {
+      await N.scheduleNotificationAsync({
+        content: {
+          title: `${info.movie} starts in 1 hour`,
+          body: `${info.cinema}, ${info.time}. Seats ${info.seats}. Have your QR code ready.`,
+        },
+        trigger: { type: N.SchedulableTriggerInputTypes.DATE, date: remindAt },
+      });
+    }
+  } catch {}
 }
