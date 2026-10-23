@@ -7,6 +7,7 @@ import { colors } from '../../src/theme/colors';
 import { getMovie } from '../../src/api/movies';
 import { getWatchlist, toggleWatchlist } from '../../src/store/watchlist';
 import { useAuth } from '../../src/store/authStore';
+import Poster from '../../src/components/Poster';
 
 export default function Watchlist() {
   const router = useRouter();
@@ -26,7 +27,7 @@ export default function Watchlist() {
     setIds(await toggleWatchlist(user.email, id));
   };
 
-  const movies: any[] = ids.map((id) => getMovie(id)).filter(Boolean);
+  const movies = ids.map((id) => getMovie(id)).filter((m) => m !== undefined);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg, paddingTop: insets.top + 16 }}>
@@ -49,18 +50,16 @@ export default function Watchlist() {
               onPress={() => router.push(`/movie/${m.id}`)}
               style={{ flexDirection: 'row', gap: 14, backgroundColor: colors.surface, borderRadius: 18, padding: 14 }}
             >
-              <View style={{ width: 56, height: 80, borderRadius: 10, backgroundColor: m.color ?? colors.border }} />
+              <Poster movie={m} style={{ width: 56, height: 80, borderRadius: 10 }} />
               <View style={{ flex: 1, justifyContent: 'center', gap: 3 }}>
                 <Text style={{ color: colors.text, fontSize: 16, fontWeight: '800' }}>{m.title}</Text>
                 <Text style={{ color: colors.muted, fontSize: 13 }}>
                   {[m.genre, m.duration].filter(Boolean).join(' · ')}
                 </Text>
-                {m.rating ? (
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                    <Ionicons name="star" size={13} color="#F5C518" />
-                    <Text style={{ color: colors.text, fontSize: 13, fontWeight: '700' }}>{m.rating}</Text>
-                  </View>
-                ) : null}
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <Ionicons name="star" size={13} color="#F5C518" />
+                  <Text style={{ color: colors.text, fontSize: 13, fontWeight: '700' }}>{m.rating}</Text>
+                </View>
               </View>
               <Pressable onPress={() => remove(m.id)} hitSlop={10} style={{ justifyContent: 'center' }}>
                 <Ionicons name="heart" size={24} color={colors.red} />
