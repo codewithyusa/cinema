@@ -8,13 +8,14 @@ import { getMovie } from '../../src/api/movies';
 import { getWatchlist, toggleWatchlist } from '../../src/store/watchlist';
 import { getReviews } from '../../src/store/reviews';
 import { useAuth } from '../../src/store/authStore';
+import Poster from '../../src/components/Poster';
 
 export default function MovieDetails() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
-  const movie: any = getMovie(id);
+  const movie = getMovie(id);
   const [saved, setSaved] = useState(false);
   const [reviewCount, setReviewCount] = useState(0);
   const [average, setAverage] = useState<string | null>(null);
@@ -63,7 +64,7 @@ export default function MovieDetails() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
       <ScrollView contentContainerStyle={{ paddingBottom: 120 }}>
-        <View style={{ height: 320, backgroundColor: movie.color ?? colors.border }}>
+        <Poster movie={movie} style={{ height: 380 }}>
           <Pressable onPress={() => router.back()} style={[circle, { left: 20 }]}>
             <Ionicons name="chevron-back" size={22} color="#fff" />
           </Pressable>
@@ -74,26 +75,22 @@ export default function MovieDetails() {
               color={saved ? colors.red : '#fff'}
             />
           </Pressable>
-        </View>
+        </Poster>
 
         <View style={{ padding: 20, gap: 14 }}>
           <Text style={{ color: colors.text, fontSize: 26, fontWeight: '800' }}>{movie.title}</Text>
 
           <View style={{ flexDirection: 'row', gap: 16, flexWrap: 'wrap' }}>
-            {movie.rating ? (
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                <Ionicons name="star" size={16} color="#F5C518" />
-                <Text style={{ color: colors.text, fontWeight: '700' }}>{movie.rating}</Text>
-              </View>
-            ) : null}
-            {movie.duration ? <Text style={{ color: colors.muted }}>{movie.duration}</Text> : null}
-            {movie.genre ? <Text style={{ color: colors.muted }}>{movie.genre}</Text> : null}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <Ionicons name="star" size={16} color="#F5C518" />
+              <Text style={{ color: colors.text, fontWeight: '700' }}>{movie.rating}</Text>
+            </View>
+            <Text style={{ color: colors.muted }}>{movie.duration}</Text>
+            <Text style={{ color: colors.muted }}>{movie.genre}</Text>
           </View>
 
           <Text style={{ color: colors.text, fontSize: 16, fontWeight: '800', marginTop: 6 }}>Story</Text>
-          <Text style={{ color: colors.muted, fontSize: 14, lineHeight: 22 }}>
-            {movie.description ?? movie.overview ?? 'No description available yet.'}
-          </Text>
+          <Text style={{ color: colors.muted, fontSize: 14, lineHeight: 22 }}>{movie.synopsis}</Text>
 
           <Pressable
             onPress={() => router.push(`/review/${id}`)}
