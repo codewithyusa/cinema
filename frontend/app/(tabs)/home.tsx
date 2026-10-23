@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../../src/theme/colors';
 import { getMovies } from '../../src/api/movies';
 import MovieCard from '../../src/components/MovieCard';
+import Poster from '../../src/components/Poster';
 
 function greeting() {
   const hour = new Date().getHours();
@@ -51,24 +52,18 @@ export default function Home() {
         </Pressable>
       </View>
 
-      <Pressable
-        onPress={() => router.push(`/movie/${hero.id}`)}
-        style={{
-          marginHorizontal: 20,
-          height: 220,
-          borderRadius: 20,
-          backgroundColor: hero.color,
-          justifyContent: 'flex-end',
-          padding: 20,
-        }}
-      >
-        <Text style={{ color: colors.redText, fontSize: 11, fontWeight: '800', letterSpacing: 1.5 }}>
-          NOW SHOWING
-        </Text>
-        <Text style={{ color: colors.text, fontSize: 30, fontWeight: '800' }}>{hero.title}</Text>
-        <Text style={{ color: colors.muted, fontSize: 13, marginTop: 4 }}>
-          {hero.genre} · {hero.duration} · {hero.rating} rating
-        </Text>
+      <Pressable onPress={() => router.push(`/movie/${hero.id}`)} style={{ marginHorizontal: 20 }}>
+        <Poster movie={hero} style={{ height: 220, borderRadius: 20, justifyContent: 'flex-end' }}>
+          <View style={{ backgroundColor: 'rgba(0,0,0,0.55)', padding: 20 }}>
+            <Text style={{ color: colors.redText, fontSize: 11, fontWeight: '800', letterSpacing: 1.5 }}>
+              NOW SHOWING
+            </Text>
+            <Text style={{ color: colors.text, fontSize: 30, fontWeight: '800' }}>{hero.title}</Text>
+            <Text style={{ color: colors.muted, fontSize: 13, marginTop: 4 }}>
+              {hero.genre} · {hero.duration} · {hero.rating} rating
+            </Text>
+          </View>
+        </Poster>
       </Pressable>
 
       <View style={{ gap: 12 }}>
