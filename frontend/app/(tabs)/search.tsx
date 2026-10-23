@@ -5,18 +5,19 @@ import { Ionicons } from '../../src/components/Icon';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../../src/theme/colors';
 import { getMovies } from '../../src/api/movies';
+import Poster from '../../src/components/Poster';
 
 export default function Search() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const movies: any[] = getMovies();
+  const movies = getMovies();
   const [query, setQuery] = useState('');
 
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return movies;
     return movies.filter(
-      (m) => m.title?.toLowerCase().includes(q) || m.genre?.toLowerCase().includes(q)
+      (m) => m.title.toLowerCase().includes(q) || m.genre.toLowerCase().includes(q)
     );
   }, [query, movies]);
 
@@ -67,18 +68,16 @@ export default function Search() {
               onPress={() => router.push(`/movie/${m.id}`)}
               style={{ flexDirection: 'row', gap: 14, backgroundColor: colors.surface, borderRadius: 18, padding: 14 }}
             >
-              <View style={{ width: 56, height: 80, borderRadius: 10, backgroundColor: m.color ?? colors.border }} />
+              <Poster movie={m} style={{ width: 56, height: 80, borderRadius: 10 }} />
               <View style={{ flex: 1, justifyContent: 'center', gap: 3 }}>
                 <Text style={{ color: colors.text, fontSize: 16, fontWeight: '800' }}>{m.title}</Text>
                 <Text style={{ color: colors.muted, fontSize: 13 }}>
                   {[m.genre, m.duration].filter(Boolean).join(' · ')}
                 </Text>
-                {m.rating ? (
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                    <Ionicons name="star" size={13} color="#F5C518" />
-                    <Text style={{ color: colors.text, fontSize: 13, fontWeight: '700' }}>{m.rating}</Text>
-                  </View>
-                ) : null}
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <Ionicons name="star" size={13} color="#F5C518" />
+                  <Text style={{ color: colors.text, fontSize: 13, fontWeight: '700' }}>{m.rating}</Text>
+                </View>
               </View>
               <View style={{ justifyContent: 'center' }}>
                 <Ionicons name="chevron-forward" size={18} color={colors.muted} />
