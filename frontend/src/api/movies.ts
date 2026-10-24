@@ -121,3 +121,43 @@ export const movies: MovieItem[] = [
 
 export const getMovies = () => movies;
 export const getMovie = (id: string) => movies.find((m) => m.id === id);
+
+export type UpcomingMovie = Omit<Movie, 'poster'> & { poster: string; releaseInDays: number };
+
+export const comingSoon: UpcomingMovie[] = [
+  {
+    id: 'u1',
+    title: 'Midnight Harbor',
+    genre: 'Thriller',
+    duration: '2h 08m',
+    rating: 0,
+    color: '#5A0F1E',
+    poster: 'https://picsum.photos/seed/midnight-harbor/400/600',
+    synopsis: 'A night-shift harbor inspector finds a ledger that points to a shipment nobody admits to.',
+    releaseInDays: 12,
+  },
+  {
+    id: 'u2',
+    title: 'Solar Drift',
+    genre: 'Sci-fi',
+    duration: '2h 20m',
+    rating: 0,
+    color: '#2B2B2B',
+    poster: 'https://picsum.photos/seed/solar-drift/400/600',
+    synopsis: 'A crew drifts toward a dying star.',
+    releaseInDays: 26,
+  },
+  {
+    id: 'u3',
+    title: 'The Quiet Orchard',
+    genre: 'Drama',
+    duration: '1h 54m',
+    rating: 0,
+    color: '#3A0A0F',
+    poster: 'https://picsum.photos/seed/quiet-orchard/400/600',
+    synopsis: 'A family returns to the farm they left behind.',
+    releaseInDays: 40,
+  },
+];
+
+export const getComingSoon = () => comingSoon;
