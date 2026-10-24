@@ -89,7 +89,7 @@ export default function MovieDetails() {
           <View style={{ flexDirection: 'row', gap: 16, flexWrap: 'wrap' }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
               <Ionicons name="star" size={16} color="#F5C518" />
-              <Text style={{ color: colors.text, fontWeight: '700' }}>{movie.rating}</Text>
+              <Text style={{ color: colors.text, fontWeight: '700' }}>{movie.rating.toFixed(1)}</Text>
             </View>
             <Text style={{ color: colors.muted }}>{movie.duration}</Text>
             <Text style={{ color: colors.muted }}>{movie.genre}</Text>
