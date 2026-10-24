@@ -1,3 +1,4 @@
+import { ReactNode, useMemo } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '../../src/components/Icon';
@@ -14,11 +15,33 @@ function greeting() {
   return 'Good evening';
 }
 
+function Section({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <View style={{ gap: 12 }}>
+      <Text style={{ color: colors.text, fontSize: 16, fontWeight: '800', paddingHorizontal: 20 }}>
+        {title}
+      </Text>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={{ paddingHorizontal: 20, gap: 12 }}
+      >
+        {children}
+      </ScrollView>
+    </View>
+  );
+}
+
 export default function Home() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const movies = getMovies();
   const hero = movies[0];
+
+  const topRated = useMemo(
+    () => [...movies].sort((a, b) => b.rating - a.rating).slice(0, 5),
+    [movies]
+  );
 
   return (
     <ScrollView
@@ -66,16 +89,17 @@ export default function Home() {
         </Poster>
       </Pressable>
 
-      <View style={{ gap: 12 }}>
-        <Text style={{ color: colors.text, fontSize: 16, fontWeight: '800', paddingHorizontal: 20 }}>
-          Now showing
-        </Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, gap: 12 }}>
-          {movies.map((m) => (
-            <MovieCard key={m.id} movie={m} />
-          ))}
-        </ScrollView>
-      </View>
+      <Section title="Now showing">
+        {movies.map((m) => (
+          <MovieCard key={m.id} movie={m} />
+        ))}
+      </Section>
+
+      <Section title="Top rated">
+        {topRated.map((m) => (
+          <MovieCard key={`top-${m.id}`} movie={m} />
+        ))}
+      </Section>
     </ScrollView>
   );
 }
