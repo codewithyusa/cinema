@@ -5,8 +5,9 @@ import { Ionicons } from '../../src/components/Icon';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../../src/theme/colors';
 import { getMovie } from '../../src/api/movies';
+import { REGULAR_PRICE, VIP_PRICE, isVip, seatsTotal } from '../../src/utils/pricing';
 
-const PRICE = 12;
+const GOLD = '#F5C518';
 const MAX_SEATS = 6;
 const rows = ['A', 'B', 'C', 'D', 'E', 'F', 'G'];
 const taken = new Set(['A3', 'A4', 'B6', 'B7', 'C8', 'C9', 'C10', 'D2', 'D3', 'D5', 'E4', 'E5', 'E6', 'F9', 'F10', 'G1', 'G2', 'G7']);
@@ -25,7 +26,7 @@ export default function Seats() {
     );
   };
 
-  const total = selected.length * PRICE;
+  const total = seatsTotal(selected);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg, paddingTop: insets.top + 12 }}>
@@ -58,6 +59,7 @@ export default function Seats() {
                 const seat = `${row}${i + 1}`;
                 const isTaken = taken.has(seat);
                 const isSelected = selected.includes(seat);
+                const vip = isVip(seat);
                 return (
                   <Pressable
                     key={seat}
@@ -71,7 +73,7 @@ export default function Seats() {
                       backgroundColor: isSelected ? colors.red : isTaken ? colors.bg : colors.border,
                       borderWidth: 1,
                       borderStyle: isTaken ? 'dashed' : 'solid',
-                      borderColor: isSelected ? colors.red : colors.muted,
+                      borderColor: isSelected ? colors.red : vip && !isTaken ? GOLD : colors.muted,
                     }}
                   />
                 );
@@ -80,11 +82,12 @@ export default function Seats() {
           ))}
         </View>
 
-        <View style={{ flexDirection: 'row', gap: 20 }}>
+        <View style={{ flexDirection: 'row', gap: 16, flexWrap: 'wrap', justifyContent: 'center' }}>
           {[
             { label: 'Available', bg: colors.border, border: colors.muted, dashed: false },
             { label: 'Selected', bg: colors.red, border: colors.red, dashed: false },
             { label: 'Taken', bg: colors.bg, border: colors.muted, dashed: true },
+            { label: 'VIP', bg: colors.border, border: GOLD, dashed: false },
           ].map((l) => (
             <View key={l.label} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
               <View
@@ -102,6 +105,17 @@ export default function Seats() {
             </View>
           ))}
         </View>
+
+        <View style={{ flexDirection: 'row', gap: 12 }}>
+          <View style={{ backgroundColor: colors.surface, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 8 }}>
+            <Text style={{ color: colors.muted, fontSize: 12 }}>Regular (A to E)</Text>
+            <Text style={{ color: colors.text, fontSize: 15, fontWeight: '800' }}>${REGULAR_PRICE.toFixed(2)}</Text>
+          </View>
+          <View style={{ backgroundColor: colors.surface, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 8, borderWidth: 1, borderColor: GOLD }}>
+            <Text style={{ color: GOLD, fontSize: 12 }}>VIP (F and G)</Text>
+            <Text style={{ color: colors.text, fontSize: 15, fontWeight: '800' }}>${VIP_PRICE.toFixed(2)}</Text>
+          </View>
+        </View>
       </ScrollView>
 
       <View
@@ -116,8 +130,8 @@ export default function Seats() {
           borderTopColor: colors.border,
         }}
       >
-        <View>
-          <Text style={{ color: colors.muted, fontSize: 13 }}>
+        <View style={{ flex: 1, paddingRight: 12 }}>
+          <Text numberOfLines={1} style={{ color: colors.muted, fontSize: 13 }}>
             {selected.length ? `${selected.length} seat${selected.length > 1 ? 's' : ''} · ${selected.join(', ')}` : 'No seats selected'}
           </Text>
           <Text style={{ color: colors.text, fontSize: 22, fontWeight: '800' }}>${total.toFixed(2)}</Text>
