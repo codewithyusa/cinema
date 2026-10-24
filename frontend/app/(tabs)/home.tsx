@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '../../src/components/Icon';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../../src/theme/colors';
-import { getMovies } from '../../src/api/movies';
+import { getComingSoon, getMovies } from '../../src/api/movies';
 import MovieCard from '../../src/components/MovieCard';
 import Poster from '../../src/components/Poster';
 
@@ -13,6 +13,11 @@ function greeting() {
   if (hour < 12) return 'Good morning';
   if (hour < 18) return 'Good afternoon';
   return 'Good evening';
+}
+
+function releaseLabel(days: number) {
+  const d = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
+  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
 }
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
@@ -36,6 +41,7 @@ export default function Home() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const movies = getMovies();
+  const upcoming = getComingSoon();
   const hero = movies[0];
 
   const topRated = useMemo(
@@ -83,7 +89,7 @@ export default function Home() {
             </Text>
             <Text style={{ color: colors.text, fontSize: 30, fontWeight: '800' }}>{hero.title}</Text>
             <Text style={{ color: colors.muted, fontSize: 13, marginTop: 4 }}>
-              {hero.genre} · {hero.duration} · {hero.rating} rating
+              {hero.genre} · {hero.duration} · {hero.rating.toFixed(1)} rating
             </Text>
           </View>
         </Poster>
@@ -98,6 +104,23 @@ export default function Home() {
       <Section title="Top rated">
         {topRated.map((m) => (
           <MovieCard key={`top-${m.id}`} movie={m} />
+        ))}
+      </Section>
+
+      <Section title="Coming soon">
+        {upcoming.map((m) => (
+          <View key={m.id} style={{ width: 140, gap: 8 }}>
+            <Poster movie={m} style={{ width: 140, height: 200, borderRadius: 16 }} />
+            <View style={{ gap: 2 }}>
+              <Text numberOfLines={1} style={{ color: colors.text, fontSize: 14, fontWeight: '800' }}>
+                {m.title}
+              </Text>
+              <Text style={{ color: colors.muted, fontSize: 12 }}>{m.genre}</Text>
+              <Text style={{ color: colors.redText, fontSize: 12, fontWeight: '700' }}>
+                Opens {releaseLabel(m.releaseInDays)}
+              </Text>
+            </View>
+          </View>
         ))}
       </Section>
     </ScrollView>
