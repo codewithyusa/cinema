@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { Linking, Pressable, ScrollView, Text, View } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '../../src/components/Icon';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -40,6 +40,12 @@ export default function MovieDetails() {
     if (!user || !id) return;
     const next = await toggleWatchlist(user.email, id);
     setSaved(next.includes(id));
+  };
+
+  const openTrailer = () => {
+    if (!movie) return;
+    const search = encodeURIComponent(`${movie.title} official trailer`);
+    Linking.openURL(`https://www.youtube.com/results?search_query=${search}`).catch(() => {});
   };
 
   if (!movie) {
@@ -89,8 +95,44 @@ export default function MovieDetails() {
             <Text style={{ color: colors.muted }}>{movie.genre}</Text>
           </View>
 
+          <Pressable
+            onPress={openTrailer}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+              height: 48,
+              borderRadius: 14,
+              borderWidth: 1,
+              borderColor: colors.red,
+            }}
+          >
+            <Ionicons name="film-outline" size={20} color={colors.redText} />
+            <Text style={{ color: colors.redText, fontSize: 15, fontWeight: '800' }}>Watch trailer</Text>
+          </Pressable>
+
           <Text style={{ color: colors.text, fontSize: 16, fontWeight: '800', marginTop: 6 }}>Story</Text>
           <Text style={{ color: colors.muted, fontSize: 14, lineHeight: 22 }}>{movie.synopsis}</Text>
+
+          <Text style={{ color: colors.text, fontSize: 16, fontWeight: '800', marginTop: 6 }}>Cast</Text>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+            {movie.cast.map((name) => (
+              <View
+                key={name}
+                style={{
+                  paddingHorizontal: 14,
+                  paddingVertical: 8,
+                  borderRadius: 18,
+                  backgroundColor: colors.surface,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                }}
+              >
+                <Text style={{ color: colors.text, fontSize: 13, fontWeight: '600' }}>{name}</Text>
+              </View>
+            ))}
+          </View>
 
           <Pressable
             onPress={() => router.push(`/review/${id}`)}
