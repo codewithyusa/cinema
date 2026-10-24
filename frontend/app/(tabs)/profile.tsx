@@ -51,6 +51,11 @@ export default function Profile() {
     } catch {}
   };
 
+  const removePhoto = async () => {
+    if (!user) return;
+    setProfile(await saveProfile(user.email, { photo: undefined }));
+  };
+
   const startEdit = () => {
     setDraft(profile.name ?? '');
     setEditing(true);
@@ -73,7 +78,7 @@ export default function Profile() {
         <Text style={{ color: colors.text, fontSize: 26, fontWeight: '800' }}>Profile</Text>
 
         <View style={{ alignItems: 'center', gap: 10, backgroundColor: colors.surface, borderRadius: 22, padding: 24 }}>
-          <Pressable onPress={pickPhoto} style={{ alignItems: 'center', gap: 8 }}>
+          <Pressable onPress={pickPhoto}>
             <View
               style={{
                 width: 90,
@@ -91,8 +96,20 @@ export default function Profile() {
                 <Text style={{ color: '#fff', fontSize: 38, fontWeight: '800' }}>{initial}</Text>
               )}
             </View>
-            <Text style={{ color: colors.redText, fontSize: 13, fontWeight: '700' }}>Change photo</Text>
           </Pressable>
+
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
+            <Pressable onPress={pickPhoto}>
+              <Text style={{ color: colors.redText, fontSize: 13, fontWeight: '700' }}>
+                {profile.photo ? 'Change photo' : 'Add photo'}
+              </Text>
+            </Pressable>
+            {profile.photo ? (
+              <Pressable onPress={removePhoto}>
+                <Text style={{ color: colors.muted, fontSize: 13, fontWeight: '700' }}>Remove photo</Text>
+              </Pressable>
+            ) : null}
+          </View>
 
           {editing ? (
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, width: '100%' }}>
