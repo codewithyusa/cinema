@@ -11,16 +11,15 @@ const keyFor = (email: string) => `yusa_inbox_${email}`;
 
 let cached: NotificationsModule | null | undefined;
 
-// Loads expo-notifications only when it is first needed.
-// Expo Go on Android does not include it, so we skip pop-ups there and nothing crashes.
+// Loads expo-notifications only in a real app or a development build.
+// Expo Go does not include it on Android, so we skip pop-ups there and nothing crashes.
 function loadNotifications(): NotificationsModule | null {
   if (Platform.OS === 'web') return null;
-  if (
-    Platform.OS === 'android' &&
-    Constants.executionEnvironment === ExecutionEnvironment.StoreClient
-  ) {
-    return null;
-  }
+
+  const env = Constants.executionEnvironment;
+  const realApp = env === ExecutionEnvironment.Standalone || env === ExecutionEnvironment.Bare;
+  if (Platform.OS === 'android' && !realApp) return null;
+
   if (cached !== undefined) return cached;
   try {
     const mod = require('expo-notifications') as NotificationsModule;
