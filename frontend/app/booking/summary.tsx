@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../../src/theme/colors';
 import { getMovie } from '../../src/api/movies';
 import Poster from '../../src/components/Poster';
+import { VIP_PRICE, REGULAR_PRICE, isVip, seatsTotal } from '../../src/utils/pricing';
 
 const FEE = 1.5;
 
@@ -16,7 +17,7 @@ const snacks = [
 ];
 
 export default function Summary() {
-  const { id, cinema, date, time, seats, total } = useLocalSearchParams<{
+  const { id, cinema, date, time, seats } = useLocalSearchParams<{
     id: string;
     cinema: string;
     date: string;
@@ -32,10 +33,12 @@ export default function Summary() {
   const change = (snackId: string, delta: number) =>
     setQty((prev) => ({ ...prev, [snackId]: Math.max(0, (prev[snackId] ?? 0) + delta) }));
 
-  const tickets = Number(total) || 0;
+  const seatList = seats ? seats.split(',') : [];
+  const vipCount = seatList.filter(isVip).length;
+  const regularCount = seatList.length - vipCount;
+  const tickets = seatsTotal(seatList);
   const snackTotal = snacks.reduce((sum, s) => sum + s.price * (qty[s.id] ?? 0), 0);
   const grandTotal = tickets + snackTotal + FEE;
-  const seatCount = seats ? seats.split(',').length : 0;
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg, paddingTop: insets.top + 12 }}>
@@ -58,7 +61,7 @@ export default function Summary() {
             <Text style={{ color: colors.muted, fontSize: 13 }}>
               {date} · {time}
             </Text>
-            <Text style={{ color: colors.redText, fontSize: 13, fontWeight: '700' }}>Seats {seats?.split(',').join(', ')}</Text>
+            <Text style={{ color: colors.redText, fontSize: 13, fontWeight: '700' }}>Seats {seatList.join(', ')}</Text>
           </View>
         </View>
 
@@ -102,7 +105,12 @@ export default function Summary() {
         </View>
 
         <View style={{ gap: 8 }}>
-          <Row label={`Tickets (${seatCount})`} value={tickets} />
+          {regularCount > 0 ? (
+            <Row label={`Regular seats (${regularCount} × $${REGULAR_PRICE})`} value={regularCount * REGULAR_PRICE} />
+          ) : null}
+          {vipCount > 0 ? (
+            <Row label={`VIP seats (${vipCount} × $${VIP_PRICE})`} value={vipCount * VIP_PRICE} />
+          ) : null}
           <Row label="Snacks" value={snackTotal} />
           <Row label="Booking fee" value={FEE} />
         </View>
