@@ -1,7 +1,10 @@
 import { ImageSourcePropType } from 'react-native';
 import { Movie } from '../types';
 
-export type MovieItem = Omit<Movie, 'poster'> & { poster: ImageSourcePropType };
+export type MovieItem = Omit<Movie, 'poster'> & {
+  poster: ImageSourcePropType;
+  cast: string[];
+};
 
 export const movies: MovieItem[] = [
   {
@@ -13,6 +16,7 @@ export const movies: MovieItem[] = [
     color: '#5C3A1A',
     poster: require('../../assets/Dune Part Two.jpg'),
     synopsis: 'Paul Atreides joins the Fremen and sets out to avenge his family while facing a choice between love and the fate of the universe.',
+    cast: ['Timothée Chalamet', 'Zendaya', 'Rebecca Ferguson', 'Javier Bardem', 'Austin Butler'],
   },
   {
     id: '2',
@@ -23,6 +27,7 @@ export const movies: MovieItem[] = [
     color: '#3A0A0F',
     poster: require('../../assets/Oppenheimer.jpg'),
     synopsis: 'The story of the scientist who led the creation of the atomic bomb, and the cost of what he built.',
+    cast: ['Cillian Murphy', 'Emily Blunt', 'Matt Damon', 'Robert Downey Jr.', 'Florence Pugh'],
   },
   {
     id: '3',
@@ -33,6 +38,7 @@ export const movies: MovieItem[] = [
     color: '#1E1E1E',
     poster: require('../../assets/Inception.jpg'),
     synopsis: 'A thief who steals secrets from dreams is given one impossible job: plant an idea inside someone’s mind.',
+    cast: ['Leonardo DiCaprio', 'Joseph Gordon-Levitt', 'Elliot Page', 'Tom Hardy', 'Marion Cotillard'],
   },
   {
     id: '4',
@@ -43,6 +49,7 @@ export const movies: MovieItem[] = [
     color: '#2B2B2B',
     poster: require('../../assets/The Dark Knight.jpg'),
     synopsis: 'Batman faces the Joker, a criminal mastermind who pushes Gotham City into chaos.',
+    cast: ['Christian Bale', 'Heath Ledger', 'Aaron Eckhart', 'Michael Caine', 'Gary Oldman'],
   },
   {
     id: '5',
@@ -53,6 +60,7 @@ export const movies: MovieItem[] = [
     color: '#1E1E1E',
     poster: require('../../assets/Interstellar.jpg'),
     synopsis: 'With Earth dying, a team of explorers travels through a wormhole to find a new home for humanity.',
+    cast: ['Matthew McConaughey', 'Anne Hathaway', 'Jessica Chastain', 'Michael Caine', 'Matt Damon'],
   },
   {
     id: '6',
@@ -63,6 +71,7 @@ export const movies: MovieItem[] = [
     color: '#0F3A4A',
     poster: require('../../assets/Avatar The Way of Water.jpg'),
     synopsis: 'Jake Sully and his family leave the forest and seek refuge among the ocean clans of Pandora.',
+    cast: ['Sam Worthington', 'Zoe Saldaña', 'Sigourney Weaver', 'Kate Winslet', 'Stephen Lang'],
   },
   {
     id: '7',
@@ -73,6 +82,7 @@ export const movies: MovieItem[] = [
     color: '#5A0F1E',
     poster: require('../../assets/Spider-Man Across the Spider-Verse.jpg'),
     synopsis: 'Miles Morales travels across the multiverse and meets a team of Spider-People who disagree with his path.',
+    cast: ['Shameik Moore', 'Hailee Steinfeld', 'Oscar Isaac', 'Issa Rae', 'Jake Johnson'],
   },
   {
     id: '8',
@@ -83,6 +93,7 @@ export const movies: MovieItem[] = [
     color: '#5C1A1A',
     poster: require('../../assets/John Wick Chapter 4.jpg'),
     synopsis: 'John Wick takes on the High Table and its allies around the world in a fight for his freedom.',
+    cast: ['Keanu Reeves', 'Donnie Yen', 'Bill Skarsgård', 'Laurence Fishburne', 'Ian McShane'],
   },
   {
     id: '9',
@@ -93,6 +104,7 @@ export const movies: MovieItem[] = [
     color: '#3A0A0F',
     poster: require('../../assets/Top Gun Maverick.jpg'),
     synopsis: 'After thirty years, Maverick trains a new class of elite pilots for a mission that seems impossible.',
+    cast: ['Tom Cruise', 'Miles Teller', 'Jennifer Connelly', 'Jon Hamm', 'Glen Powell'],
   },
   {
     id: '10',
@@ -103,6 +115,7 @@ export const movies: MovieItem[] = [
     color: '#2B2B2B',
     poster: require('../../assets/Furious 7.jpg'),
     synopsis: 'Dom and his crew face a deadly enemy who is hunting each of them down.',
+    cast: ['Vin Diesel', 'Paul Walker', 'Dwayne Johnson', 'Jason Statham', 'Michelle Rodriguez'],
   },
 ];
 
