@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import Constants, { ExecutionEnvironment } from 'expo-constants';
+import { requireOptionalNativeModule } from 'expo-modules-core';
 import { Platform } from 'react-native';
 import { getSettings } from './settings';
 
@@ -11,16 +11,17 @@ const keyFor = (email: string) => `yusa_inbox_${email}`;
 
 let cached: NotificationsModule | null | undefined;
 
-// Loads expo-notifications only in a real app or a development build.
-// Expo Go does not include it on Android, so we skip pop-ups there and nothing crashes.
+// Loads expo-notifications only when the phone app really includes it.
+// Expo Go on Android does not, so we skip pop-ups there and nothing crashes.
 function loadNotifications(): NotificationsModule | null {
   if (Platform.OS === 'web') return null;
-
-  const env = Constants.executionEnvironment;
-  const realApp = env === ExecutionEnvironment.Standalone || env === ExecutionEnvironment.Bare;
-  if (Platform.OS === 'android' && !realApp) return null;
-
   if (cached !== undefined) return cached;
+
+  if (Platform.OS === 'android' && !requireOptionalNativeModule('ExpoTopicSubscriptionModule')) {
+    cached = null;
+    return cached;
+  }
+
   try {
     const mod = require('expo-notifications') as NotificationsModule;
     mod.setNotificationHandler({
