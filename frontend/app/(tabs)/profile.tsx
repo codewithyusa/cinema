@@ -1,27 +1,66 @@
 import { useCallback, useState } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { Image, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
+import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '../../src/components/Icon';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../../src/theme/colors';
 import { signOut, useAuth } from '../../src/store/authStore';
 import { getTickets } from '../../src/store/tickets';
+import { getProfile, saveProfile, Profile as ProfileData } from '../../src/store/profile';
 
 export default function Profile() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const [ticketCount, setTicketCount] = useState(0);
+  const [profile, setProfile] = useState<ProfileData>({});
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
 
   useFocusEffect(
     useCallback(() => {
-      if (user) getTickets(user.email).then((t) => setTicketCount(t.length));
-      else setTicketCount(0);
+      if (user) {
+        getTickets(user.email).then((t) => setTicketCount(t.length));
+        getProfile(user.email).then(setProfile);
+      } else {
+        setTicketCount(0);
+        setProfile({});
+      }
     }, [user?.email])
   );
 
-  const name = user?.email.split('@')[0] ?? 'Guest';
+  const defaultName = user?.email.split('@')[0] ?? 'Guest';
+  const name = profile.name?.trim() || defaultName;
   const initial = name.charAt(0).toUpperCase();
+
+  const pickPhoto = async () => {
+    if (!user) return;
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.3,
+        base64: true,
+      });
+      if (result.canceled || !result.assets?.length) return;
+      const asset = result.assets[0];
+      const photo = asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : asset.uri;
+      setProfile(await saveProfile(user.email, { photo }));
+    } catch {}
+  };
+
+  const startEdit = () => {
+    setDraft(profile.name ?? '');
+    setEditing(true);
+  };
+
+  const saveName = async () => {
+    if (!user) return;
+    setProfile(await saveProfile(user.email, { name: draft.trim() }));
+    setEditing(false);
+  };
 
   const handleSignOut = async () => {
     await signOut();
@@ -30,23 +69,66 @@ export default function Profile() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg, paddingTop: insets.top + 16 }}>
-      <ScrollView contentContainerStyle={{ padding: 20, gap: 20 }}>
+      <ScrollView contentContainerStyle={{ padding: 20, gap: 20 }} keyboardShouldPersistTaps="handled">
         <Text style={{ color: colors.text, fontSize: 26, fontWeight: '800' }}>Profile</Text>
 
         <View style={{ alignItems: 'center', gap: 10, backgroundColor: colors.surface, borderRadius: 22, padding: 24 }}>
-          <View
-            style={{
-              width: 80,
-              height: 80,
-              borderRadius: 40,
-              backgroundColor: colors.red,
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <Text style={{ color: '#fff', fontSize: 34, fontWeight: '800' }}>{initial}</Text>
-          </View>
-          <Text style={{ color: colors.text, fontSize: 20, fontWeight: '800' }}>{name}</Text>
+          <Pressable onPress={pickPhoto} style={{ alignItems: 'center', gap: 8 }}>
+            <View
+              style={{
+                width: 90,
+                height: 90,
+                borderRadius: 45,
+                backgroundColor: colors.red,
+                alignItems: 'center',
+                justifyContent: 'center',
+                overflow: 'hidden',
+              }}
+            >
+              {profile.photo ? (
+                <Image source={{ uri: profile.photo }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+              ) : (
+                <Text style={{ color: '#fff', fontSize: 38, fontWeight: '800' }}>{initial}</Text>
+              )}
+            </View>
+            <Text style={{ color: colors.redText, fontSize: 13, fontWeight: '700' }}>Change photo</Text>
+          </Pressable>
+
+          {editing ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, width: '100%' }}>
+              <TextInput
+                value={draft}
+                onChangeText={setDraft}
+                placeholder="Your name"
+                placeholderTextColor={colors.muted}
+                maxLength={24}
+                autoFocus
+                style={{
+                  flex: 1,
+                  height: 44,
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  backgroundColor: colors.bg,
+                  color: colors.text,
+                  fontSize: 16,
+                  paddingHorizontal: 12,
+                }}
+              />
+              <Pressable
+                onPress={saveName}
+                style={{ height: 44, paddingHorizontal: 18, borderRadius: 12, backgroundColor: colors.red, alignItems: 'center', justifyContent: 'center' }}
+              >
+                <Text style={{ color: '#fff', fontWeight: '800' }}>Save</Text>
+              </Pressable>
+            </View>
+          ) : (
+            <Pressable onPress={startEdit} style={{ alignItems: 'center', gap: 2 }}>
+              <Text style={{ color: colors.text, fontSize: 20, fontWeight: '800' }}>{name}</Text>
+              <Text style={{ color: colors.redText, fontSize: 13, fontWeight: '700' }}>Edit name</Text>
+            </Pressable>
+          )}
+
           <Text style={{ color: colors.muted, fontSize: 14 }}>{user?.email}</Text>
         </View>
 
