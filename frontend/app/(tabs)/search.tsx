@@ -12,14 +12,19 @@ export default function Search() {
   const insets = useSafeAreaInsets();
   const movies = getMovies();
   const [query, setQuery] = useState('');
+  const [genre, setGenre] = useState('All');
+
+  const genres = useMemo(() => ['All', ...Array.from(new Set(movies.map((m) => m.genre)))], [movies]);
 
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return movies;
-    return movies.filter(
-      (m) => m.title.toLowerCase().includes(q) || m.genre.toLowerCase().includes(q)
-    );
-  }, [query, movies]);
+    return movies.filter((m) => {
+      const matchGenre = genre === 'All' || m.genre === genre;
+      const matchQuery =
+        !q || m.title.toLowerCase().includes(q) || m.genre.toLowerCase().includes(q);
+      return matchGenre && matchQuery;
+    });
+  }, [query, genre, movies]);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg, paddingTop: insets.top + 16 }}>
@@ -55,10 +60,44 @@ export default function Search() {
         </View>
       </View>
 
+      <View style={{ height: 52, marginTop: 14 }}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ paddingHorizontal: 20, gap: 10, alignItems: 'center' }}
+        >
+          {genres.map((g) => {
+            const active = g === genre;
+            return (
+              <Pressable
+                key={g}
+                onPress={() => setGenre(g)}
+                style={{
+                  height: 38,
+                  paddingHorizontal: 16,
+                  borderRadius: 19,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: active ? colors.red : colors.surface,
+                  borderWidth: 1,
+                  borderColor: active ? colors.red : colors.border,
+                }}
+              >
+                <Text style={{ color: active ? '#fff' : colors.text, fontSize: 14, fontWeight: '700' }}>
+                  {g}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+      </View>
+
       {results.length === 0 ? (
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 10 }}>
           <Ionicons name="film-outline" size={48} color={colors.muted} />
-          <Text style={{ color: colors.muted, fontSize: 14 }}>No movies found for "{query}"</Text>
+          <Text style={{ color: colors.muted, fontSize: 14 }}>
+            {query ? `No movies found for "${query}"` : 'No movies in this genre'}
+          </Text>
         </View>
       ) : (
         <ScrollView contentContainerStyle={{ padding: 20, gap: 14 }} keyboardShouldPersistTaps="handled">
