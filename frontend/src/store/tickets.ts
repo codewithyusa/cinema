@@ -33,3 +33,10 @@ export async function saveTicket(email: string, ticket: SavedTicket): Promise<bo
     return false;
   }
 }
+
+export async function removeTicket(email: string, code: string): Promise<void> {
+  try {
+    const all = await getTickets(email);
+    await AsyncStorage.setItem(keyFor(email), JSON.stringify(all.filter((t) => t.code !== code)));
+  } catch {}
+}
