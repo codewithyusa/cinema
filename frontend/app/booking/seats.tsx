@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '../../src/components/Icon';
@@ -6,11 +6,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../../src/theme/colors';
 import { getMovie } from '../../src/api/movies';
 import { REGULAR_PRICE, VIP_PRICE, isVip, seatsTotal } from '../../src/utils/pricing';
+import { takenSeatsFor } from '../../src/utils/takenSeats';
 
 const GOLD = '#F5C518';
 const MAX_SEATS = 6;
 const rows = ['A', 'B', 'C', 'D', 'E', 'F', 'G'];
-const taken = new Set(['A3', 'A4', 'B6', 'B7', 'C8', 'C9', 'C10', 'D2', 'D3', 'D5', 'E4', 'E5', 'E6', 'F9', 'F10', 'G1', 'G2', 'G7']);
 
 export default function Seats() {
   const { id, cinema, date, time } = useLocalSearchParams<{ id: string; cinema: string; date: string; time: string }>();
@@ -18,6 +18,8 @@ export default function Seats() {
   const insets = useSafeAreaInsets();
   const movie = getMovie(id);
   const [selected, setSelected] = useState<string[]>([]);
+
+  const taken = useMemo(() => takenSeatsFor(`${id}|${cinema}|${date}|${time}`, rows), [id, cinema, date, time]);
 
   const toggle = (seat: string) => {
     if (taken.has(seat)) return;
