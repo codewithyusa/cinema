@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { Pressable, ScrollView, Share, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '../../src/components/Icon';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -36,6 +36,8 @@ export default function Ticket() {
 
   const isSavedView = view === '1';
   const isCash = method === 'cash';
+  const amount = (Number(total) || 0).toFixed(2);
+  const seatText = seats?.split(',').join(', ');
   const bookingCode = `YC-${id}-${(seats ?? '').replace(/,/g, '')}-${(time ?? '').replace(/\D/g, '')}`;
   const qrValue = JSON.stringify({ code: bookingCode, movie: id, cinema, date, time, seats });
 
@@ -70,6 +72,25 @@ export default function Ticket() {
     router.replace('/tickets');
   };
 
+  const shareTicket = async () => {
+    const message = [
+      `🎬 ${movie?.title ?? 'Movie ticket'}`,
+      `📍 ${cinema}`,
+      `📅 ${date} · ${time}`,
+      `💺 Seats: ${seatText}`,
+      `🎟 Booking code: ${bookingCode}`,
+      isCash ? `💵 To pay at cinema: $${amount}` : `✅ Paid: $${amount}`,
+      '',
+      'Booked with YUSA CINEMA',
+    ].join('\n');
+
+    try {
+      await Share.share({ message });
+    } catch {
+      // Share menu was closed or failed. Nothing to do.
+    }
+  };
+
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg, paddingTop: insets.top + 12 }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 20 }}>
@@ -97,7 +118,7 @@ export default function Ticket() {
           <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
             <Info label="Date" value={date} />
             <Info label="Time" value={time} />
-            <Info label="Seats" value={seats?.split(',').join(', ')} />
+            <Info label="Seats" value={seatText} />
           </View>
 
           <View style={{ height: 1, backgroundColor: colors.border }} />
@@ -114,9 +135,27 @@ export default function Ticket() {
 
           <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
             <Info label={isCash ? 'Payment' : 'Paid with'} value={methodNames[method ?? ''] ?? method} />
-            <Info label={isCash ? 'To pay' : 'Total'} value={`$${(Number(total) || 0).toFixed(2)}`} />
+            <Info label={isCash ? 'To pay' : 'Total'} value={`$${amount}`} />
           </View>
         </View>
+
+        <Pressable
+          onPress={shareTicket}
+          style={{
+            height: 52,
+            borderRadius: 14,
+            backgroundColor: colors.surface,
+            borderWidth: 1,
+            borderColor: colors.border,
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexDirection: 'row',
+            gap: 8,
+          }}
+        >
+          <Ionicons name="share-outline" size={18} color={colors.text} />
+          <Text style={{ color: colors.text, fontSize: 16, fontWeight: '800' }}>Share ticket</Text>
+        </Pressable>
 
         {isSavedView ? (
           confirming ? (
