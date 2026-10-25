@@ -1,16 +1,31 @@
 import { useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Ionicons } from '../../src/components/Icon';
+import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../../src/theme/colors';
 import { getMovie } from '../../src/api/movies';
 
-const methods = [
-  { id: 'telebirr', name: 'Telebirr', desc: 'Pay with your mobile wallet', icon: 'phone-portrait-outline' },
-  { id: 'mpesa', name: 'M-Pesa', desc: 'Pay with M-Pesa', icon: 'cash-outline' },
-  { id: 'card', name: 'Card', desc: 'Visa or Mastercard', icon: 'card-outline' },
-] as const;
+type Method = 'telebirr' | 'card' | 'cash';
+
+const methods: { id: Method; name: string; desc: string; icon: keyof typeof Ionicons.glyphMap }[] = [
+  { id: 'telebirr', name: 'Telebirr', desc: 'Pay with your phone number', icon: 'phone-portrait-outline' },
+  { id: 'card', name: 'Credit / Debit card', desc: 'Visa, Mastercard', icon: 'card-outline' },
+  { id: 'cash', name: 'Pay at cinema', desc: 'Pay at the counter before the show', icon: 'cash-outline' },
+];
+
+const inputStyle = {
+  height: 50,
+  borderRadius: 12,
+  backgroundColor: colors.bg,
+  borderWidth: 1,
+  borderColor: colors.border,
+  paddingHorizontal: 14,
+  color: colors.text,
+  fontSize: 15,
+} as const;
+
+const makeCode = () => 'YC' + Math.random().toString(36).slice(2, 8).toUpperCase();
 
 export default function Payment() {
   const { id, cinema, date, time, seats, total } = useLocalSearchParams<{
@@ -24,22 +39,53 @@ export default function Payment() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const movie = getMovie(id);
-  const [method, setMethod] = useState<string>('telebirr');
-  const [paying, setPaying] = useState(false);
+
+  const [method, setMethod] = useState<Method>('telebirr');
+  const [phone, setPhone] = useState('');
+  const [cardNumber, setCardNumber] = useState('');
+  const [expiry, setExpiry] = useState('');
+  const [cvv, setCvv] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
   const amount = Number(total) || 0;
 
+  const validate = () => {
+    if (method === 'telebirr' && !/^(\+251|0)?9\d{8}$/.test(phone.replace(/\s/g, ''))) {
+      return 'Enter a valid phone number, for example 0912345678';
+    }
+    if (method === 'card') {
+      if (cardNumber.replace(/\s/g, '').length < 16) return 'Enter a valid 16 digit card number';
+      if (!/^\d{2}\/\d{2}$/.test(expiry)) return 'Expiry must look like 08/28';
+      if (cvv.length < 3) return 'Enter the 3 digit CVV';
+    }
+    return '';
+  };
+
   const pay = () => {
-    if (paying) return;
-    setPaying(true);
-    // Mock payment. Replace with a real call to your backend (create payment, then confirm via webhook).
+    const problem = validate();
+    setError(problem);
+    if (problem) return;
+
+    setLoading(true);
+    // Demo only. A real app must confirm payment on the server.
     setTimeout(() => {
-      setPaying(false);
+      setLoading(false);
       router.replace({
         pathname: '/booking/ticket',
-        params: { id, cinema, date, time, seats, total: String(amount), method },
+        params: {
+          id,
+          cinema,
+          date,
+          time,
+          seats,
+          total: String(amount),
+          code: makeCode(),
+          method,
+          paid: method === 'cash' ? '0' : '1',
+        },
       });
-    }, 1800);
+    }, 1500);
   };
 
   return (
@@ -47,7 +93,7 @@ export default function Payment() {
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 20 }}>
         <Pressable
           onPress={() => router.back()}
-          disabled={paying}
+          disabled={loading}
           style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' }}
         >
           <Ionicons name="chevron-back" size={22} color={colors.text} />
@@ -55,7 +101,7 @@ export default function Payment() {
         <Text style={{ color: colors.text, fontSize: 20, fontWeight: '800' }}>Payment</Text>
       </View>
 
-      <ScrollView contentContainerStyle={{ padding: 20, gap: 16 }}>
+      <ScrollView contentContainerStyle={{ padding: 20, gap: 16 }} keyboardShouldPersistTaps="handled">
         <View style={{ backgroundColor: colors.surface, borderRadius: 18, padding: 14, gap: 3 }}>
           <Text style={{ color: colors.text, fontSize: 16, fontWeight: '800' }}>{movie?.title}</Text>
           <Text style={{ color: colors.muted, fontSize: 13 }}>{cinema}</Text>
@@ -68,39 +114,109 @@ export default function Payment() {
         <Text style={{ color: colors.text, fontSize: 15, fontWeight: '800' }}>Payment method</Text>
         <View style={{ gap: 10 }}>
           {methods.map((m) => {
-            const selected = method === m.id;
+            const active = method === m.id;
             return (
               <Pressable
                 key={m.id}
-                onPress={() => setMethod(m.id)}
-                disabled={paying}
+                onPress={() => {
+                  setMethod(m.id);
+                  setError('');
+                }}
                 style={{
                   flexDirection: 'row',
                   alignItems: 'center',
                   gap: 14,
-                  padding: 14,
-                  borderRadius: 18,
                   backgroundColor: colors.surface,
+                  borderRadius: 16,
+                  padding: 14,
                   borderWidth: 1.5,
-                  borderColor: selected ? colors.red : colors.border,
+                  borderColor: active ? colors.red : colors.border,
                 }}
               >
-                <View style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center' }}>
-                  <Ionicons name={m.icon} size={22} color={colors.text} />
-                </View>
+                <Ionicons name={m.icon} size={24} color={active ? colors.red : colors.muted} />
                 <View style={{ flex: 1 }}>
-                  <Text style={{ color: colors.text, fontSize: 15, fontWeight: '700' }}>{m.name}</Text>
+                  <Text style={{ color: colors.text, fontSize: 14, fontWeight: '700' }}>{m.name}</Text>
                   <Text style={{ color: colors.muted, fontSize: 12 }}>{m.desc}</Text>
                 </View>
-                <Ionicons
-                  name={selected ? 'radio-button-on' : 'radio-button-off'}
-                  size={22}
-                  color={selected ? colors.red : colors.muted}
-                />
+                <Ionicons name={active ? 'radio-button-on' : 'radio-button-off'} size={22} color={active ? colors.red : colors.muted} />
               </Pressable>
             );
           })}
         </View>
+
+        {method === 'telebirr' && (
+          <View style={{ backgroundColor: colors.surface, borderRadius: 16, padding: 14, gap: 10 }}>
+            <Text style={{ color: colors.muted, fontSize: 13 }}>Telebirr phone number</Text>
+            <TextInput
+              value={phone}
+              onChangeText={setPhone}
+              placeholder="09 1234 5678"
+              placeholderTextColor={colors.muted}
+              keyboardType="phone-pad"
+              style={inputStyle}
+            />
+          </View>
+        )}
+
+        {method === 'card' && (
+          <View style={{ backgroundColor: colors.surface, borderRadius: 16, padding: 14, gap: 10 }}>
+            <Text style={{ color: colors.muted, fontSize: 13 }}>Card number</Text>
+            <TextInput
+              value={cardNumber}
+              onChangeText={(t) =>
+                setCardNumber(
+                  t
+                    .replace(/\D/g, '')
+                    .slice(0, 16)
+                    .replace(/(.{4})/g, '$1 ')
+                    .trim()
+                )
+              }
+              placeholder="1234 5678 9012 3456"
+              placeholderTextColor={colors.muted}
+              keyboardType="number-pad"
+              style={inputStyle}
+            />
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <View style={{ flex: 1, gap: 6 }}>
+                <Text style={{ color: colors.muted, fontSize: 13 }}>Expiry</Text>
+                <TextInput
+                  value={expiry}
+                  onChangeText={(t) => {
+                    const d = t.replace(/\D/g, '').slice(0, 4);
+                    setExpiry(d.length > 2 ? d.slice(0, 2) + '/' + d.slice(2) : d);
+                  }}
+                  placeholder="MM/YY"
+                  placeholderTextColor={colors.muted}
+                  keyboardType="number-pad"
+                  style={inputStyle}
+                />
+              </View>
+              <View style={{ flex: 1, gap: 6 }}>
+                <Text style={{ color: colors.muted, fontSize: 13 }}>CVV</Text>
+                <TextInput
+                  value={cvv}
+                  onChangeText={(t) => setCvv(t.replace(/\D/g, '').slice(0, 3))}
+                  placeholder="123"
+                  placeholderTextColor={colors.muted}
+                  keyboardType="number-pad"
+                  secureTextEntry
+                  style={inputStyle}
+                />
+              </View>
+            </View>
+          </View>
+        )}
+
+        {method === 'cash' && (
+          <View style={{ backgroundColor: colors.surface, borderRadius: 16, padding: 14 }}>
+            <Text style={{ color: colors.muted, fontSize: 13, lineHeight: 19 }}>
+              Your seats are reserved. Show your booking code at the counter and pay before the show starts.
+            </Text>
+          </View>
+        )}
+
+        {error ? <Text style={{ color: colors.redText, fontSize: 13, fontWeight: '600' }}>{error}</Text> : null}
       </ScrollView>
 
       <View
@@ -121,22 +237,24 @@ export default function Payment() {
         </View>
         <Pressable
           onPress={pay}
-          disabled={paying}
+          disabled={loading}
           style={{
             height: 52,
             minWidth: 150,
             paddingHorizontal: 28,
             borderRadius: 14,
             backgroundColor: colors.red,
-            opacity: paying ? 0.7 : 1,
             alignItems: 'center',
             justifyContent: 'center',
+            opacity: loading ? 0.7 : 1,
           }}
         >
-          {paying ? (
+          {loading ? (
             <ActivityIndicator color="#fff" />
           ) : (
-            <Text style={{ color: '#fff', fontSize: 16, fontWeight: '800' }}>Pay now</Text>
+            <Text style={{ color: '#fff', fontSize: 16, fontWeight: '800' }}>
+              {method === 'cash' ? 'Reserve' : `Pay $${amount.toFixed(2)}`}
+            </Text>
           )}
         </Pressable>
       </View>
