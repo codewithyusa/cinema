@@ -215,9 +215,22 @@ export default function Payment() {
             </Text>
           </View>
         )}
-
-        {error ? <Text style={{ color: colors.redText, fontSize: 13, fontWeight: '600' }}>{error}</Text> : null}
       </ScrollView>
+
+      {error ? (
+        <Text
+          style={{
+            color: colors.redText,
+            fontSize: 13,
+            fontWeight: '700',
+            textAlign: 'center',
+            paddingVertical: 10,
+            backgroundColor: colors.surface,
+          }}
+        >
+          {error}
+        </Text>
+      ) : null}
 
       <View
         style={{
