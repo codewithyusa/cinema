@@ -27,7 +27,7 @@ export default function Splash() {
       </View>
 
       <Pressable
-        onPress={() => router.push('/login')}
+        onPress={() => router.push('/onboarding')}
         style={{
           height: 52,
           borderRadius: 14,
