@@ -88,19 +88,36 @@ export default function Home() {
           <Text style={{ color: colors.muted, fontSize: 14 }}>{greeting()}</Text>
           <Text style={{ color: colors.text, fontSize: 26, fontWeight: '800' }}>What are we watching?</Text>
         </View>
-        <Pressable
-          onPress={() => router.push('/notifications')}
-          style={{
-            width: 44,
-            height: 44,
-            borderRadius: 14,
-            backgroundColor: colors.surface,
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          <Ionicons name="notifications-outline" size={22} color={colors.text} />
-        </Pressable>
+
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          <Pressable
+            onPress={() => router.push('/scanner')}
+            style={{
+              height: 44,
+              paddingHorizontal: 14,
+              borderRadius: 14,
+              backgroundColor: colors.surface,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Text style={{ color: colors.text, fontSize: 13, fontWeight: '800' }}>Scan</Text>
+          </Pressable>
+
+          <Pressable
+            onPress={() => router.push('/notifications')}
+            style={{
+              width: 44,
+              height: 44,
+              borderRadius: 14,
+              backgroundColor: colors.surface,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Ionicons name="notifications-outline" size={22} color={colors.text} />
+          </Pressable>
+        </View>
       </View>
 
       <View style={{ gap: 14 }}>
