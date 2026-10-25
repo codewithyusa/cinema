@@ -14,6 +14,7 @@ const methodNames: Record<string, string> = {
   telebirr: 'Telebirr',
   mpesa: 'M-Pesa',
   card: 'Card',
+  cash: 'Pay at cinema',
 };
 
 export default function Ticket() {
@@ -34,6 +35,7 @@ export default function Ticket() {
   const [confirming, setConfirming] = useState(false);
 
   const isSavedView = view === '1';
+  const isCash = method === 'cash';
   const bookingCode = `YC-${id}-${(seats ?? '').replace(/,/g, '')}-${(time ?? '').replace(/\D/g, '')}`;
   const qrValue = JSON.stringify({ code: bookingCode, movie: id, cinema, date, time, seats });
 
@@ -111,8 +113,8 @@ export default function Ticket() {
           <View style={{ height: 1, backgroundColor: colors.border }} />
 
           <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-            <Info label="Paid with" value={methodNames[method ?? ''] ?? method} />
-            <Info label="Total" value={`$${(Number(total) || 0).toFixed(2)}`} />
+            <Info label={isCash ? 'Payment' : 'Paid with'} value={methodNames[method ?? ''] ?? method} />
+            <Info label={isCash ? 'To pay' : 'Total'} value={`$${(Number(total) || 0).toFixed(2)}`} />
           </View>
         </View>
 
