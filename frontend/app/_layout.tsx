@@ -17,10 +17,11 @@ export default function RootLayout() {
     if (!ready || !navState?.key) return;
     const inAuth = segments[0] === '(auth)';
     const atSplash = segments.length === 0;
+    const atOnboarding = segments[0] === 'onboarding';
 
-    if (!user && !inAuth && !atSplash) {
+    if (!user && !inAuth && !atSplash && !atOnboarding) {
       router.replace('/');
-    } else if (user && (inAuth || atSplash)) {
+    } else if (user && (inAuth || atSplash || atOnboarding)) {
       router.replace('/home');
     }
   }, [user, ready, segments, navState?.key]);
