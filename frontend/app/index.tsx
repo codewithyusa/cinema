@@ -1,9 +1,15 @@
 import { Pressable, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { colors } from '../src/theme/colors';
+import { hasSeenOnboarding } from '../src/store/onboarding';
 
 export default function Splash() {
   const router = useRouter();
+
+  const start = async () => {
+    const seen = await hasSeenOnboarding();
+    router.push(seen ? '/login' : '/onboarding');
+  };
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg, padding: 28, paddingBottom: 40 }}>
@@ -27,7 +33,7 @@ export default function Splash() {
       </View>
 
       <Pressable
-        onPress={() => router.push('/onboarding')}
+        onPress={start}
         style={{
           height: 52,
           borderRadius: 14,
