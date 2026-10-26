@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '../src/components/Icon';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../src/theme/colors';
+import { markOnboardingSeen } from '../src/store/onboarding';
 
 // Where to go when onboarding ends.
 const NEXT_ROUTE = '/login';
@@ -253,7 +254,11 @@ export default function Onboarding() {
   const [index, setIndex] = useState(0);
 
   const last = index === slides.length - 1;
-  const finish = () => router.replace(NEXT_ROUTE as never);
+
+  const finish = async () => {
+    await markOnboardingSeen();
+    router.replace(NEXT_ROUTE as never);
+  };
 
   return (
     <View
