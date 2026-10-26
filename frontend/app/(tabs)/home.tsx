@@ -1,10 +1,12 @@
-import { ReactNode, useMemo, useState } from 'react';
+import { ReactNode, useCallback, useMemo, useState } from 'react';
 import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { Ionicons } from '../../src/components/Icon';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../../src/theme/colors';
 import { getComingSoon, getMovies } from '../../src/api/movies';
+import { useAuth } from '../../src/store/authStore';
+import { getProfile } from '../../src/store/profile';
 import MovieCard from '../../src/components/MovieCard';
 import Poster from '../../src/components/Poster';
 
@@ -40,12 +42,26 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 export default function Home() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { user } = useAuth();
   const movies = getMovies();
   const upcoming = getComingSoon();
   const hero = movies[0];
 
   const [query, setQuery] = useState('');
   const [genre, setGenre] = useState('All');
+  const [displayName, setDisplayName] = useState('');
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!user) {
+        setDisplayName('');
+        return;
+      }
+      getProfile(user.email).then((p) => setDisplayName(p.name?.trim() || user.email.split('@')[0]));
+    }, [user?.email])
+  );
+
+  const firstName = displayName.split(' ')[0];
 
   const topRated = useMemo(
     () => [...movies].sort((a, b) => b.rating - a.rating).slice(0, 5),
@@ -84,8 +100,11 @@ export default function Home() {
           paddingHorizontal: 20,
         }}
       >
-        <View>
-          <Text style={{ color: colors.muted, fontSize: 14 }}>{greeting()}</Text>
+        <View style={{ flex: 1, paddingRight: 12 }}>
+          <Text numberOfLines={1} style={{ color: colors.muted, fontSize: 14 }}>
+            {greeting()}
+            {firstName ? `, ${firstName}` : ''}
+          </Text>
           <Text style={{ color: colors.text, fontSize: 26, fontWeight: '800' }}>What are we watching?</Text>
         </View>
 
