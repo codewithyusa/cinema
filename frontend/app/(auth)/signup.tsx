@@ -3,6 +3,7 @@ import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, View } from 
 import { useRouter } from 'expo-router';
 import { colors } from '../../src/theme/colors';
 import { createAccount } from '../../src/store/accounts';
+import { saveProfile } from '../../src/store/profile';
 
 const input = {
   height: 52,
@@ -33,9 +34,14 @@ export default function SignUp() {
     setError('');
     setLoading(true);
     const result = await createAccount(name, email, password);
-    setLoading(false);
 
-    if (!result.ok) return setError(result.error);
+    if (!result.ok) {
+      setLoading(false);
+      return setError(result.error);
+    }
+
+    await saveProfile(email.trim().toLowerCase(), { name: name.trim() });
+    setLoading(false);
     router.push({ pathname: '/verify', params: { email: email.trim() } });
   };
 
@@ -58,6 +64,7 @@ export default function SignUp() {
           style={input}
           placeholder="Your name"
           placeholderTextColor={colors.muted}
+          maxLength={24}
           value={name}
           onChangeText={setName}
         />
