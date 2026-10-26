@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { Pressable, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { colors } from '../../src/theme/colors';
+import { checkAccount } from '../../src/store/accounts';
 
 const input = {
   height: 52,
@@ -19,17 +20,18 @@ export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const submit = () => {
-    if (!/^\S+@\S+\.\S+$/.test(email.trim())) {
-      setError('Enter a valid email address.');
-      return;
-    }
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters.');
-      return;
-    }
+  const submit = async () => {
+    if (!/^\S+@\S+\.\S+$/.test(email.trim())) return setError('Enter a valid email address.');
+    if (password.length < 6) return setError('Password must be at least 6 characters.');
+
     setError('');
+    setLoading(true);
+    const result = await checkAccount(email, password);
+    setLoading(false);
+
+    if (!result.ok) return setError(result.error);
     router.push({ pathname: '/verify', params: { email: email.trim() } });
   };
 
@@ -71,16 +73,29 @@ export default function Login() {
 
       <Pressable
         onPress={submit}
+        disabled={loading}
         style={{
           height: 52,
           borderRadius: 14,
           backgroundColor: colors.red,
           alignItems: 'center',
           justifyContent: 'center',
+          opacity: loading ? 0.7 : 1,
         }}
       >
-        <Text style={{ color: '#fff', fontSize: 16, fontWeight: '800' }}>Sign in</Text>
+        {loading ? (
+          <ActivityIndicator color="#fff" />
+        ) : (
+          <Text style={{ color: '#fff', fontSize: 16, fontWeight: '800' }}>Sign in</Text>
+        )}
       </Pressable>
+
+      <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 6 }}>
+        <Text style={{ color: colors.muted, fontSize: 14 }}>New here?</Text>
+        <Pressable onPress={() => router.push('/signup')} hitSlop={10}>
+          <Text style={{ color: colors.redText, fontSize: 14, fontWeight: '800' }}>Create an account</Text>
+        </Pressable>
+      </View>
     </View>
   );
 }
