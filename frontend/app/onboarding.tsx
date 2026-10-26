@@ -1,12 +1,12 @@
 import { useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Image, Pressable, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '../src/components/Icon';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../src/theme/colors';
 
-// Where to go when onboarding ends. Change it if your app starts somewhere else.
-const NEXT_ROUTE = '/home';
+// Where to go when onboarding ends.
+const NEXT_ROUTE = '/login';
 
 const SEAT_ROWS = ['A', 'B', 'C', 'D', 'E'];
 const TAKEN = new Set(['A3', 'A4', 'B6', 'C1', 'C2', 'D5', 'D6', 'E7']);
@@ -93,7 +93,9 @@ function BrowseArt() {
       </View>
 
       <View style={{ width: 300, height: 240 }}>
-        <View
+        <Image
+          source={require('../assets/Oppenheimer.jpg')}
+          resizeMode="cover"
           style={{
             position: 'absolute',
             left: 0,
@@ -101,11 +103,12 @@ function BrowseArt() {
             width: 130,
             height: 180,
             borderRadius: 16,
-            backgroundColor: '#5C3A1A',
             transform: [{ rotate: '-8deg' }],
           }}
         />
-        <View
+        <Image
+          source={require('../assets/The Dark Knight.jpg')}
+          resizeMode="cover"
           style={{
             position: 'absolute',
             left: 170,
@@ -113,23 +116,15 @@ function BrowseArt() {
             width: 130,
             height: 180,
             borderRadius: 16,
-            backgroundColor: '#5A0F1E',
             transform: [{ rotate: '8deg' }],
           }}
         />
-        <View
-          style={{
-            position: 'absolute',
-            left: 80,
-            top: 0,
-            width: 140,
-            height: 200,
-            borderRadius: 18,
-            backgroundColor: '#0F3A4A',
-            borderWidth: 1,
-            borderColor: colors.border,
-          }}
-        >
+        <View style={{ position: 'absolute', left: 80, top: 0, width: 140, height: 200 }}>
+          <Image
+            source={require('../assets/Dune Part Two.jpg')}
+            resizeMode="cover"
+            style={{ width: 140, height: 200, borderRadius: 18 }}
+          />
           <View
             style={{
               position: 'absolute',
@@ -144,7 +139,6 @@ function BrowseArt() {
           >
             <Text style={{ color: '#fff', fontSize: 12, fontWeight: '700' }}>★ 8.5</Text>
           </View>
-          <View style={{ position: 'absolute', left: 14, bottom: 16, width: 80, height: 10, borderRadius: 5, backgroundColor: 'rgba(255,255,255,0.85)' }} />
         </View>
       </View>
     </View>
