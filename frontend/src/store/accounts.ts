@@ -1,46 +1,23 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as Crypto from 'expo-crypto';
+import { ApiError, request } from '../api/http';
+import { setPendingSession } from './authStore';
 
-type Account = { name: string; email: string; salt: string; hash: string };
 type Result = { ok: true } | { ok: false; error: string };
+type AuthResponse = { token: string; user: { id: number; name: string; email: string } };
 
-const KEY = 'yusa_accounts';
-
-async function readAll(): Promise<Account[]> {
+async function authenticate(path: string, body: object): Promise<Result> {
   try {
-    const raw = await AsyncStorage.getItem(KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
+    const res = await request<AuthResponse>(path, { method: 'POST', body });
+    setPendingSession({ email: res.user.email, name: res.user.name, token: res.token });
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof ApiError ? e.message : 'Something went wrong. Try again.' };
   }
 }
 
-function hashPassword(password: string, salt: string) {
-  return Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, salt + password);
-}
+// Accounts now live on the server. The screens keep calling the same two
+// functions as before.
+export const createAccount = (name: string, email: string, password: string) =>
+  authenticate('/auth/signup', { name, email, password });
 
-export async function createAccount(name: string, email: string, password: string): Promise<Result> {
-  const accounts = await readAll();
-  const clean = email.trim().toLowerCase();
-  if (accounts.some((a) => a.email === clean)) {
-    return { ok: false, error: 'An account with this email already exists.' };
-  }
-  const salt = Crypto.randomUUID();
-  const hash = await hashPassword(password, salt);
-  accounts.push({ name: name.trim(), email: clean, salt, hash });
-  try {
-    await AsyncStorage.setItem(KEY, JSON.stringify(accounts));
-  } catch {
-    return { ok: false, error: 'Could not save your account. Try again.' };
-  }
-  return { ok: true };
-}
-
-export async function checkAccount(email: string, password: string): Promise<Result> {
-  const accounts = await readAll();
-  const account = accounts.find((a) => a.email === email.trim().toLowerCase());
-  if (!account) return { ok: false, error: 'No account with this email. Please sign up first.' };
-  const hash = await hashPassword(password, account.salt);
-  if (hash !== account.hash) return { ok: false, error: 'Wrong password.' };
-  return { ok: true };
-}
+export const checkAccount = (email: string, password: string) =>
+  authenticate('/auth/login', { email, password });
