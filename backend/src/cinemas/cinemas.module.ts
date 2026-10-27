@@ -6,5 +6,6 @@ import { ShowtimesController } from './showtimes.controller';
 @Module({
   controllers: [CinemasController, ShowtimesController],
   providers: [CinemasService],
+  exports: [CinemasService],
 })
 export class CinemasModule {}
