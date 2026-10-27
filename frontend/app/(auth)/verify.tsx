@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { colors } from '../../src/theme/colors';
-import { signIn } from '../../src/store/authStore';
+import { completeSignIn } from '../../src/store/authStore';
 
 export default function Verify() {
   const router = useRouter();
@@ -15,7 +15,12 @@ export default function Verify() {
       setError('Enter the 6-digit code.');
       return;
     }
-    await signIn(email ?? '');
+    const ok = await completeSignIn();
+    if (!ok) {
+      // The app was reloaded while this screen was open. Start again.
+      router.replace('/login');
+      return;
+    }
     router.replace('/home');
   };
 
