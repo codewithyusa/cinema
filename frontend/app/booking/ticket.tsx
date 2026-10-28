@@ -18,7 +18,7 @@ const methodNames: Record<string, string> = {
 };
 
 export default function Ticket() {
-  const { id, cinema, date, time, seats, total, method, view } = useLocalSearchParams<{
+  const { id, cinema, date, time, seats, total, method, code, view } = useLocalSearchParams<{
     id: string;
     cinema: string;
     date: string;
@@ -26,6 +26,7 @@ export default function Ticket() {
     seats: string;
     total: string;
     method: string;
+    code?: string;
     view?: string;
   }>();
   const router = useRouter();
@@ -38,7 +39,9 @@ export default function Ticket() {
   const isCash = method === 'cash';
   const amount = (Number(total) || 0).toFixed(2);
   const seatText = seats?.split(',').join(', ');
-  const bookingCode = `YC-${id}-${(seats ?? '').replace(/,/g, '')}-${(time ?? '').replace(/\D/g, '')}`;
+  // The server makes the booking code. The old formula is only a fallback
+  // for tickets saved before the server existed.
+  const bookingCode = code || `YC-${id}-${(seats ?? '').replace(/,/g, '')}-${(time ?? '').replace(/\D/g, '')}`;
   const qrValue = JSON.stringify({ code: bookingCode, movie: id, cinema, date, time, seats });
 
   useEffect(() => {
@@ -93,7 +96,17 @@ export default function Ticket() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg, paddingTop: insets.top + 12 }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 20 }}>
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 14,
+          paddingHorizontal: 20,
+          paddingBottom: 12,
+          backgroundColor: colors.bg,
+          zIndex: 1,
+        }}
+      >
         {isSavedView ? (
           <Pressable
             onPress={() => router.back()}
@@ -108,7 +121,7 @@ export default function Ticket() {
         </View>
       </View>
 
-      <ScrollView contentContainerStyle={{ padding: 20, gap: 16 }}>
+      <ScrollView contentContainerStyle={{ padding: 20, paddingTop: 8, gap: 16 }}>
         <View style={{ backgroundColor: colors.surface, borderRadius: 22, padding: 20, gap: 16 }}>
           <View style={{ gap: 4 }}>
             <Text style={{ color: colors.text, fontSize: 20, fontWeight: '800' }}>{movie?.title}</Text>
@@ -128,7 +141,7 @@ export default function Ticket() {
               <QRCode value={qrValue} size={200} />
             </View>
             <Text style={{ color: colors.muted, fontSize: 12 }}>Show this code at the cinema entrance</Text>
-            <Text style={{ color: colors.text, fontSize: 14, fontWeight: '800', letterSpacing: 1 }}>{bookingCode}</Text>
+            <Text style={{ color: colors.text, fontSize: 18, fontWeight: '800', letterSpacing: 2 }}>{bookingCode}</Text>
           </View>
 
           <View style={{ height: 1, backgroundColor: colors.border }} />
