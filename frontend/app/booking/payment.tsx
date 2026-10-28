@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../../src/theme/colors';
 import { getMovie } from '../../src/api/movies';
 import HoldTimer from '../../src/components/HoldTimer';
+import { ApiError, createBooking } from '../../src/api/seats';
 
 type Method = 'telebirr' | 'card' | 'cash';
 
@@ -25,8 +26,6 @@ const inputStyle = {
   color: colors.text,
   fontSize: 15,
 } as const;
-
-const makeCode = () => 'YC' + Math.random().toString(36).slice(2, 8).toUpperCase();
 
 export default function Payment() {
   const { id, cinema, date, time, seats, total, showtimeId, expiresAt } = useLocalSearchParams<{
@@ -74,15 +73,15 @@ export default function Payment() {
     return '';
   };
 
-  const pay = () => {
+  const pay = async () => {
     const problem = validate();
     setError(problem);
     if (problem) return;
 
     setLoading(true);
-    // Demo only. A real app must confirm payment on the server.
-    setTimeout(() => {
-      setLoading(false);
+    try {
+      // Card details stay on the phone. Only the payment method goes to the server.
+      const booking = await createBooking(showtimeId ?? '1', method);
       router.replace({
         pathname: '/booking/ticket',
         params: {
@@ -90,14 +89,18 @@ export default function Payment() {
           cinema,
           date,
           time,
-          seats,
+          seats: booking.seats.join(','),
           total: String(amount),
-          code: makeCode(),
+          code: booking.code,
           method,
-          paid: method === 'cash' ? '0' : '1',
+          paid: booking.paid ? '1' : '0',
         },
       });
-    }, 1500);
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'Cannot reach the server.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (

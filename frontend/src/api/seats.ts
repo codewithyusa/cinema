@@ -10,6 +10,15 @@ export type SeatGrid = {
   rows: { label: string; seats: { id: string; status: SeatStatus }[] }[];
 };
 
+export type Booking = {
+  id: number;
+  code: string;
+  seats: string[];
+  total_etb: number;
+  method: string;
+  paid: boolean;
+};
+
 export class ApiError extends Error {
   status: number;
   constructor(message: string, status: number) {
@@ -60,3 +69,9 @@ export const holdSeats = (showtimeId: string, seats: string[]) =>
 
 export const releaseSeats = (showtimeId: string) =>
   request<{ released: boolean }>(`/showtimes/${showtimeId}/seats/hold`, { method: 'DELETE' });
+
+export const createBooking = (showtimeId: string, method: 'telebirr' | 'card' | 'cash') =>
+  request<Booking>('/bookings', {
+    method: 'POST',
+    body: JSON.stringify({ showtimeId: Number(showtimeId), method }),
+  });
