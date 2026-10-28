@@ -12,11 +12,18 @@ export type Movie = {
   trailer_url: string | null;
 };
 
+// Same 10 movies, in the same order, as the app's movies.ts. The ids must match.
 const SEED: Omit<Movie, 'id'>[] = [
-  { title: 'Dune: Part Two', genre: 'Sci-fi', duration_min: 166, rating: 8.5, synopsis: 'Paul Atreides unites with the Fremen to take revenge on those who destroyed his family.', poster_url: null, trailer_url: null },
-  { title: 'Interstellar', genre: 'Sci-fi', duration_min: 169, rating: 8.7, synopsis: 'A team of explorers travels through a wormhole to save humanity.', poster_url: null, trailer_url: null },
-  { title: 'The Dark Knight', genre: 'Action', duration_min: 152, rating: 9.0, synopsis: 'Batman faces the Joker, a criminal mastermind who spreads chaos in Gotham.', poster_url: null, trailer_url: null },
-  { title: 'Inception', genre: 'Thriller', duration_min: 148, rating: 8.8, synopsis: 'A thief who steals secrets from dreams is given one last impossible job.', poster_url: null, trailer_url: null },
+  { title: 'Dune: Part Two', genre: 'Sci-fi', duration_min: 166, rating: 8.5, synopsis: 'Paul Atreides joins the Fremen and sets out to avenge his family.', poster_url: null, trailer_url: null },
+  { title: 'Oppenheimer', genre: 'Drama', duration_min: 180, rating: 8.3, synopsis: 'The story of the scientist who led the creation of the atomic bomb.', poster_url: null, trailer_url: null },
+  { title: 'Inception', genre: 'Sci-fi', duration_min: 148, rating: 8.8, synopsis: 'A thief who steals secrets from dreams is given one impossible job.', poster_url: null, trailer_url: null },
+  { title: 'The Dark Knight', genre: 'Action', duration_min: 152, rating: 9.0, synopsis: 'Batman faces the Joker, who pushes Gotham City into chaos.', poster_url: null, trailer_url: null },
+  { title: 'Interstellar', genre: 'Sci-fi', duration_min: 169, rating: 8.7, synopsis: 'Explorers travel through a wormhole to find a new home for humanity.', poster_url: null, trailer_url: null },
+  { title: 'Avatar: The Way of Water', genre: 'Adventure', duration_min: 192, rating: 7.6, synopsis: 'Jake Sully and his family seek refuge among the ocean clans of Pandora.', poster_url: null, trailer_url: null },
+  { title: 'Spider-Man: Across the Spider-Verse', genre: 'Animation', duration_min: 140, rating: 8.6, synopsis: 'Miles Morales travels across the multiverse and meets a team of Spider-People.', poster_url: null, trailer_url: null },
+  { title: 'John Wick: Chapter 4', genre: 'Action', duration_min: 169, rating: 7.7, synopsis: 'John Wick takes on the High Table in a fight for his freedom.', poster_url: null, trailer_url: null },
+  { title: 'Top Gun: Maverick', genre: 'Action', duration_min: 130, rating: 8.2, synopsis: 'Maverick trains a new class of elite pilots for an impossible mission.', poster_url: null, trailer_url: null },
+  { title: 'Furious 7', genre: 'Action', duration_min: 137, rating: 7.1, synopsis: 'Dom and his crew face a deadly enemy who is hunting each of them down.', poster_url: null, trailer_url: null },
 ];
 
 @Injectable()

@@ -85,7 +85,8 @@ export class CinemasService {
       );
 
       for (let day = 0; day < 7; day++) {
-        for (let movieId = 1; movieId <= 4; movieId++) {
+        // One set of showtimes for each of the 10 movies.
+        for (let movieId = 1; movieId <= 10; movieId++) {
           const hallIndex = (movieId - 1) % 2;
           const hours = movieId <= 2 ? [12, 18] : [15, 21];
           for (const hour of hours) {

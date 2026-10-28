@@ -74,6 +74,9 @@ export class SeatsService {
 
   hold(showtimeId: number, userId: number, requested: string[]) {
     const showtime = this.cinemas.getShowtime(showtimeId);
+    if (new Date(showtime.starts_at).getTime() <= Date.now()) {
+      throw new BadRequestException('This showtime has already started.');
+    }
     const seats = [...new Set(requested.map((s) => s.trim().toUpperCase()))];
 
     for (const seat of seats) {
