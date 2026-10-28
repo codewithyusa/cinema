@@ -1,4 +1,5 @@
 import { Platform } from 'react-native';
+import { getToken } from '../store/authStore';
 
 // Phone uses your PC's IP. The browser uses localhost.
 export const API_URL = Platform.OS === 'web' ? 'http://localhost:8080' : 'http://192.168.100.24:8080';
@@ -27,32 +28,17 @@ export class ApiError extends Error {
   }
 }
 
-// TEMPORARY: creates a throwaway server account so seat holds work.
-// We replace this with the real login when sign up/login moves to the server.
-let token: string | null = null;
-
-async function ensureToken(): Promise<string> {
-  if (token) return token;
-  const email = `dev${Date.now()}${Math.floor(Math.random() * 1000)}@example.com`;
-  const res = await fetch(`${API_URL}/auth/signup`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name: 'Dev User', email, password: 'secret123' }),
-  });
-  if (!res.ok) throw new ApiError('Could not sign in to the server.', res.status);
-  const data = await res.json();
-  token = data.token as string;
-  return token;
-}
-
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const t = await ensureToken();
+  const token = getToken();
+  if (!token) throw new ApiError('Please sign in again.', 401);
+
   const res = await fetch(`${API_URL}${path}`, {
     ...init,
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${t}` },
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
   });
   const body = await res.json().catch(() => null);
   if (!res.ok) {
+    if (res.status === 401) throw new ApiError('Your session expired. Please sign in again.', 401);
     const message = Array.isArray(body?.message) ? body.message.join(', ') : body?.message;
     throw new ApiError(message ?? 'Request failed.', res.status);
   }
