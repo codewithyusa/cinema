@@ -1,10 +1,12 @@
-import { useState } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '../../src/components/Icon';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../../src/theme/colors';
 import { getMovie } from '../../src/api/movies';
+import { ApiError } from '../../src/api/seats';
+import { ShowtimeItem, getShowtimes } from '../../src/api/showtimes';
 
 const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -16,27 +18,17 @@ const days = Array.from({ length: 5 }, (_, i) => {
   return { full: d, day: dayNames[d.getDay()], date: String(d.getDate()), month: monthNames[d.getMonth()] };
 });
 
-const cinemas = [
-  { name: 'Cinemo Central', distance: '1.2 km', tags: ['IMAX', '2D'], times: ['4:30 PM', '7:30 PM', '10:15 PM'] },
-  { name: 'Cinemo Riverside', distance: '3.8 km', tags: ['2D'], times: ['5:00 PM', '8:00 PM'] },
-  { name: 'Cinemo Mall', distance: '6.1 km', tags: ['VIP', '2D'], times: ['6:15 PM', '9:00 PM'] },
-];
+const sameDay = (a: Date, b: Date) =>
+  a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 
-function hasPassed(day: Date, time: string) {
-  const m = time.match(/(\d+):(\d+)\s*(AM|PM)/i);
-  if (!m) return false;
-  let hour = Number(m[1]) % 12;
-  if (m[3].toUpperCase() === 'PM') hour += 12;
-  const show = new Date(day);
-  show.setHours(hour, Number(m[2]), 0, 0);
-  return show.getTime() <= Date.now();
+function formatTime(iso: string) {
+  const d = new Date(iso);
+  const h = d.getHours();
+  const m = String(d.getMinutes()).padStart(2, '0');
+  return `${h % 12 === 0 ? 12 : h % 12}:${m} ${h >= 12 ? 'PM' : 'AM'}`;
 }
 
 function TimeChip({ time, past, onPress }: { time: string; past: boolean; onPress: () => void }) {
-  const borderColor = past ? colors.border : colors.red;
-  const textColor = past ? colors.muted : colors.redText;
-  const decoration = past ? 'line-through' : 'none';
-
   return (
     <Pressable
       disabled={past}
@@ -46,12 +38,19 @@ function TimeChip({ time, past, onPress }: { time: string; past: boolean; onPres
         paddingHorizontal: 14,
         borderRadius: 10,
         borderWidth: 1,
-        borderColor: borderColor,
+        borderColor: past ? colors.border : colors.red,
         opacity: past ? 0.4 : 1,
         justifyContent: 'center',
       }}
     >
-      <Text style={{ color: textColor, fontSize: 13, fontWeight: '700', textDecorationLine: decoration }}>
+      <Text
+        style={{
+          color: past ? colors.muted : colors.redText,
+          fontSize: 13,
+          fontWeight: '700',
+          textDecorationLine: past ? 'line-through' : 'none',
+        }}
+      >
         {time}
       </Text>
     </Pressable>
@@ -63,15 +62,47 @@ export default function Showtimes() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const movie = getMovie(id);
-  const [selected, setSelected] = useState(0);
 
-  const pick = (cinema: string, time: string) =>
+  const [selected, setSelected] = useState(0);
+  const [items, setItems] = useState<ShowtimeItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      setItems(await getShowtimes(id));
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'Something went wrong. Try again.');
+    } finally {
+      setLoading(false);
+    }
+  }, [id]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  // Showtimes for the chosen day, grouped by cinema.
+  const groups = useMemo(() => {
+    const map = new Map<number, { name: string; shows: ShowtimeItem[] }>();
+    for (const s of items) {
+      if (!sameDay(new Date(s.starts_at), days[selected].full)) continue;
+      if (!map.has(s.cinema_id)) map.set(s.cinema_id, { name: s.cinema_name, shows: [] });
+      map.get(s.cinema_id)!.shows.push(s);
+    }
+    return [...map.values()];
+  }, [items, selected]);
+
+  const pick = (s: ShowtimeItem) =>
     router.push({
       pathname: '/booking/seats',
       params: {
         id,
-        cinema,
-        time,
+        showtimeId: String(s.id),
+        cinema: s.cinema_name,
+        time: formatTime(s.starts_at),
         date: `${days[selected].day} ${days[selected].date} ${days[selected].month}`,
       },
     });
@@ -92,8 +123,10 @@ export default function Showtimes() {
         >
           <Ionicons name="chevron-back" size={22} color={colors.text} />
         </Pressable>
-        <View>
-          <Text style={{ color: colors.text, fontSize: 20, fontWeight: '800' }}>{movie?.title ?? 'Showtimes'}</Text>
+        <View style={{ flex: 1 }}>
+          <Text numberOfLines={1} style={{ color: colors.text, fontSize: 20, fontWeight: '800' }}>
+            {movie?.title ?? 'Showtimes'}
+          </Text>
           <Text style={{ color: colors.muted, fontSize: 13 }}>Choose date, cinema and time</Text>
         </View>
       </View>
@@ -123,33 +156,44 @@ export default function Showtimes() {
           ))}
         </View>
 
-        {cinemas.map((c) => (
-          <View key={c.name} style={{ backgroundColor: colors.surface, borderRadius: 18, padding: 16, gap: 12 }}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-              <View>
-                <Text style={{ color: colors.text, fontSize: 16, fontWeight: '800' }}>{c.name}</Text>
-                <Text style={{ color: colors.muted, fontSize: 12, marginTop: 2 }}>{c.distance} away</Text>
-              </View>
-              <View style={{ flexDirection: 'row', gap: 6 }}>
-                {c.tags.map((t) => (
-                  <View key={t} style={{ backgroundColor: colors.border, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4 }}>
-                    <Text style={{ color: colors.text, fontSize: 11, fontWeight: '700' }}>{t}</Text>
-                  </View>
+        {loading ? (
+          <View style={{ paddingVertical: 40, alignItems: 'center' }}>
+            <ActivityIndicator color={colors.red} size="large" />
+          </View>
+        ) : error ? (
+          <View style={{ alignItems: 'center', gap: 16, paddingVertical: 32 }}>
+            <Text style={{ color: colors.redText, fontSize: 14, textAlign: 'center' }}>{error}</Text>
+            <Pressable
+              onPress={load}
+              style={{ height: 48, paddingHorizontal: 28, borderRadius: 14, backgroundColor: colors.red, alignItems: 'center', justifyContent: 'center' }}
+            >
+              <Text style={{ color: '#fff', fontSize: 15, fontWeight: '800' }}>Try again</Text>
+            </Pressable>
+          </View>
+        ) : groups.length === 0 ? (
+          <Text style={{ color: colors.muted, fontSize: 14, textAlign: 'center', paddingVertical: 32 }}>
+            No showtimes on this day. Try another date.
+          </Text>
+        ) : (
+          groups.map((g) => (
+            <View key={g.name} style={{ backgroundColor: colors.surface, borderRadius: 18, padding: 16, gap: 12 }}>
+              <Text style={{ color: colors.text, fontSize: 16, fontWeight: '800' }}>{g.name}</Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                {g.shows.map((s) => (
+                  <TimeChip
+                    key={s.id}
+                    time={formatTime(s.starts_at)}
+                    past={new Date(s.starts_at).getTime() <= Date.now()}
+                    onPress={() => pick(s)}
+                  />
                 ))}
               </View>
+              <Text style={{ color: colors.muted, fontSize: 12 }}>
+                {g.shows[0].hall_name} · {g.shows[0].price_etb} ETB per seat
+              </Text>
             </View>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-              {c.times.map((t) => (
-                <TimeChip
-                  key={t}
-                  time={t}
-                  past={hasPassed(days[selected].full, t)}
-                  onPress={() => pick(c.name, t)}
-                />
-              ))}
-            </View>
-          </View>
-        ))}
+          ))
+        )}
       </ScrollView>
     </View>
   );
