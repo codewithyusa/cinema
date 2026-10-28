@@ -1,31 +1,107 @@
-import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useCallback, useState } from 'react';
+import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '../../src/components/Icon';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../../src/theme/colors';
 import { getMovie } from '../../src/api/movies';
 import { REGULAR_PRICE, VIP_PRICE, isVip, seatsTotal } from '../../src/utils/pricing';
-import { takenSeatsFor } from '../../src/utils/takenSeats';
+import { ApiError, SeatGrid, getSeats, holdSeats, releaseSeats } from '../../src/api/seats';
 
 const GOLD = '#F5C518';
 const MAX_SEATS = 6;
-const rows = ['A', 'B', 'C', 'D', 'E', 'F', 'G'];
 
 export default function Seats() {
-  const { id, cinema, date, time } = useLocalSearchParams<{ id: string; cinema: string; date: string; time: string }>();
+  const { id, cinema, date, time, showtimeId: showtimeParam } = useLocalSearchParams<{
+    id: string;
+    cinema: string;
+    date: string;
+    time: string;
+    showtimeId?: string;
+  }>();
+  // Until showtimes come from the server, every showtime uses server showtime 1.
+  const showtimeId = showtimeParam ?? '1';
+
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const movie = getMovie(id);
+
+  const [grid, setGrid] = useState<SeatGrid | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [holding, setHolding] = useState(false);
+  const [error, setError] = useState('');
 
-  const taken = useMemo(() => takenSeatsFor(`${id}|${cinema}|${date}|${time}`, rows), [id, cinema, date, time]);
+  const load = useCallback(async () => {
+    try {
+      const data = await getSeats(showtimeId);
+      const status: Record<string, string> = {};
+      const mine: string[] = [];
+      data.rows.forEach((r) =>
+        r.seats.forEach((s) => {
+          status[s.id] = s.status;
+          if (s.status === 'mine') mine.push(s.id);
+        })
+      );
+      setGrid(data);
+      // keep picks that are still available, plus seats this user already holds
+      setSelected((prev) => {
+        const next = new Set(prev.filter((s) => status[s] === 'free' || status[s] === 'mine'));
+        mine.forEach((s) => next.add(s));
+        return [...next];
+      });
+      setError('');
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'Cannot reach the server. Check that the backend is running.');
+    } finally {
+      setLoading(false);
+    }
+  }, [showtimeId]);
 
-  const toggle = (seat: string) => {
-    if (taken.has(seat)) return;
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [load])
+  );
+
+  const toggle = (seat: string, status: string) => {
+    if (status !== 'free' && status !== 'mine') return;
     setSelected((prev) =>
       prev.includes(seat) ? prev.filter((s) => s !== seat) : prev.length < MAX_SEATS ? [...prev, seat] : prev
     );
+  };
+
+  const onBack = async () => {
+    try {
+      await releaseSeats(showtimeId);
+    } catch {}
+    router.back();
+  };
+
+  const onContinue = async () => {
+    setHolding(true);
+    setError('');
+    try {
+      const hold = await holdSeats(showtimeId, selected);
+      router.push({
+        pathname: '/booking/summary',
+        params: {
+          id,
+          cinema,
+          date,
+          time,
+          showtimeId,
+          seats: selected.join(','),
+          total: String(seatsTotal(selected)),
+          expiresAt: hold.expires_at,
+        },
+      });
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'Cannot reach the server.');
+      await load();
+    } finally {
+      setHolding(false);
+    }
   };
 
   const total = seatsTotal(selected);
@@ -34,7 +110,7 @@ export default function Seats() {
     <View style={{ flex: 1, backgroundColor: colors.bg, paddingTop: insets.top + 12 }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 20 }}>
         <Pressable
-          onPress={() => router.back()}
+          onPress={onBack}
           style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' }}
         >
           <Ionicons name="chevron-back" size={22} color={colors.text} />
@@ -47,78 +123,98 @@ export default function Seats() {
         </View>
       </View>
 
-      <ScrollView contentContainerStyle={{ padding: 20, alignItems: 'center', gap: 24 }}>
-        <View style={{ alignItems: 'center', width: '100%' }}>
-          <View style={{ width: '80%', height: 6, borderRadius: 3, backgroundColor: colors.red }} />
-          <Text style={{ color: colors.muted, fontSize: 11, letterSpacing: 3, marginTop: 6 }}>SCREEN</Text>
+      {loading ? (
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+          <ActivityIndicator color={colors.red} size="large" />
         </View>
-
-        <View style={{ gap: 8 }}>
-          {rows.map((row) => (
-            <View key={row} style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-              <Text style={{ width: 16, color: colors.muted, fontSize: 11, fontWeight: '700' }}>{row}</Text>
-              {Array.from({ length: 10 }, (_, i) => {
-                const seat = `${row}${i + 1}`;
-                const isTaken = taken.has(seat);
-                const isSelected = selected.includes(seat);
-                const vip = isVip(seat);
-                return (
-                  <Pressable
-                    key={seat}
-                    onPress={() => toggle(seat)}
-                    disabled={isTaken}
-                    style={{
-                      width: 28,
-                      height: 28,
-                      borderRadius: 7,
-                      marginRight: i === 4 ? 14 : 0,
-                      backgroundColor: isSelected ? colors.red : isTaken ? colors.bg : colors.border,
-                      borderWidth: 1,
-                      borderStyle: isTaken ? 'dashed' : 'solid',
-                      borderColor: isSelected ? colors.red : vip && !isTaken ? GOLD : colors.muted,
-                    }}
-                  />
-                );
-              })}
-            </View>
-          ))}
+      ) : !grid ? (
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 16, padding: 24 }}>
+          <Text style={{ color: colors.redText, fontSize: 14, textAlign: 'center' }}>{error}</Text>
+          <Pressable
+            onPress={() => {
+              setLoading(true);
+              load();
+            }}
+            style={{ height: 48, paddingHorizontal: 28, borderRadius: 14, backgroundColor: colors.red, alignItems: 'center', justifyContent: 'center' }}
+          >
+            <Text style={{ color: '#fff', fontSize: 15, fontWeight: '800' }}>Try again</Text>
+          </Pressable>
         </View>
-
-        <View style={{ flexDirection: 'row', gap: 16, flexWrap: 'wrap', justifyContent: 'center' }}>
-          {[
-            { label: 'Available', bg: colors.border, border: colors.muted, dashed: false },
-            { label: 'Selected', bg: colors.red, border: colors.red, dashed: false },
-            { label: 'Taken', bg: colors.bg, border: colors.muted, dashed: true },
-            { label: 'VIP', bg: colors.border, border: GOLD, dashed: false },
-          ].map((l) => (
-            <View key={l.label} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <View
-                style={{
-                  width: 14,
-                  height: 14,
-                  borderRadius: 4,
-                  backgroundColor: l.bg,
-                  borderWidth: 1,
-                  borderColor: l.border,
-                  borderStyle: l.dashed ? 'dashed' : 'solid',
-                }}
-              />
-              <Text style={{ color: colors.muted, fontSize: 12 }}>{l.label}</Text>
-            </View>
-          ))}
-        </View>
-
-        <View style={{ flexDirection: 'row', gap: 12 }}>
-          <View style={{ backgroundColor: colors.surface, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 8 }}>
-            <Text style={{ color: colors.muted, fontSize: 12 }}>Regular (A to E)</Text>
-            <Text style={{ color: colors.text, fontSize: 15, fontWeight: '800' }}>${REGULAR_PRICE.toFixed(2)}</Text>
+      ) : (
+        <ScrollView contentContainerStyle={{ padding: 20, alignItems: 'center', gap: 24 }}>
+          <View style={{ alignItems: 'center', width: '100%' }}>
+            <View style={{ width: '80%', height: 6, borderRadius: 3, backgroundColor: colors.red }} />
+            <Text style={{ color: colors.muted, fontSize: 11, letterSpacing: 3, marginTop: 6 }}>SCREEN</Text>
           </View>
-          <View style={{ backgroundColor: colors.surface, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 8, borderWidth: 1, borderColor: GOLD }}>
-            <Text style={{ color: GOLD, fontSize: 12 }}>VIP (F and G)</Text>
-            <Text style={{ color: colors.text, fontSize: 15, fontWeight: '800' }}>${VIP_PRICE.toFixed(2)}</Text>
+
+          <View style={{ gap: 8 }}>
+            {grid.rows.map((row) => (
+              <View key={row.label} style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                <Text style={{ width: 16, color: colors.muted, fontSize: 11, fontWeight: '700' }}>{row.label}</Text>
+                {row.seats.map((s, i) => {
+                  const isSelected = selected.includes(s.id);
+                  const isTaken = s.status !== 'free' && s.status !== 'mine';
+                  const vip = isVip(s.id);
+                  return (
+                    <Pressable
+                      key={s.id}
+                      onPress={() => toggle(s.id, s.status)}
+                      disabled={isTaken}
+                      style={{
+                        width: 28,
+                        height: 28,
+                        borderRadius: 7,
+                        marginRight: i === Math.floor(row.seats.length / 2) - 1 ? 14 : 0,
+                        backgroundColor: isSelected ? colors.red : isTaken ? colors.bg : colors.border,
+                        borderWidth: 1,
+                        borderStyle: isTaken ? 'dashed' : 'solid',
+                        borderColor: isSelected ? colors.red : vip && !isTaken ? GOLD : colors.muted,
+                      }}
+                    />
+                  );
+                })}
+              </View>
+            ))}
           </View>
-        </View>
-      </ScrollView>
+
+          <View style={{ flexDirection: 'row', gap: 16, flexWrap: 'wrap', justifyContent: 'center' }}>
+            {[
+              { label: 'Available', bg: colors.border, border: colors.muted, dashed: false },
+              { label: 'Selected', bg: colors.red, border: colors.red, dashed: false },
+              { label: 'Taken', bg: colors.bg, border: colors.muted, dashed: true },
+              { label: 'VIP', bg: colors.border, border: GOLD, dashed: false },
+            ].map((l) => (
+              <View key={l.label} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <View
+                  style={{
+                    width: 14,
+                    height: 14,
+                    borderRadius: 4,
+                    backgroundColor: l.bg,
+                    borderWidth: 1,
+                    borderColor: l.border,
+                    borderStyle: l.dashed ? 'dashed' : 'solid',
+                  }}
+                />
+                <Text style={{ color: colors.muted, fontSize: 12 }}>{l.label}</Text>
+              </View>
+            ))}
+          </View>
+
+          <View style={{ flexDirection: 'row', gap: 12 }}>
+            <View style={{ backgroundColor: colors.surface, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 8 }}>
+              <Text style={{ color: colors.muted, fontSize: 12 }}>Regular (A to E)</Text>
+              <Text style={{ color: colors.text, fontSize: 15, fontWeight: '800' }}>${REGULAR_PRICE.toFixed(2)}</Text>
+            </View>
+            <View style={{ backgroundColor: colors.surface, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 8, borderWidth: 1, borderColor: GOLD }}>
+              <Text style={{ color: GOLD, fontSize: 12 }}>VIP (F)</Text>
+              <Text style={{ color: colors.text, fontSize: 15, fontWeight: '800' }}>${VIP_PRICE.toFixed(2)}</Text>
+            </View>
+          </View>
+
+          {error ? <Text style={{ color: colors.redText, fontSize: 13, textAlign: 'center' }}>{error}</Text> : null}
+        </ScrollView>
+      )}
 
       <View
         style={{
@@ -139,23 +235,18 @@ export default function Seats() {
           <Text style={{ color: colors.text, fontSize: 22, fontWeight: '800' }}>${total.toFixed(2)}</Text>
         </View>
         <Pressable
-          disabled={!selected.length}
-          onPress={() =>
-            router.push({
-              pathname: '/booking/summary',
-              params: { id, cinema, date, time, seats: selected.join(','), total: String(total) },
-            })
-          }
+          disabled={!selected.length || holding}
+          onPress={onContinue}
           style={{
             height: 52,
             paddingHorizontal: 32,
             borderRadius: 14,
-            backgroundColor: selected.length ? colors.red : colors.border,
+            backgroundColor: selected.length && !holding ? colors.red : colors.border,
             alignItems: 'center',
             justifyContent: 'center',
           }}
         >
-          <Text style={{ color: '#fff', fontSize: 16, fontWeight: '800' }}>Continue</Text>
+          {holding ? <ActivityIndicator color="#fff" /> : <Text style={{ color: '#fff', fontSize: 16, fontWeight: '800' }}>Continue</Text>}
         </Pressable>
       </View>
     </View>
