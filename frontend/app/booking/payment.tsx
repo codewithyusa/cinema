@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../../src/theme/colors';
 import { getMovie } from '../../src/api/movies';
+import HoldTimer from '../../src/components/HoldTimer';
 
 type Method = 'telebirr' | 'card' | 'cash';
 
@@ -28,13 +29,15 @@ const inputStyle = {
 const makeCode = () => 'YC' + Math.random().toString(36).slice(2, 8).toUpperCase();
 
 export default function Payment() {
-  const { id, cinema, date, time, seats, total } = useLocalSearchParams<{
+  const { id, cinema, date, time, seats, total, showtimeId, expiresAt } = useLocalSearchParams<{
     id: string;
     cinema: string;
     date: string;
     time: string;
     seats: string;
     total: string;
+    showtimeId?: string;
+    expiresAt?: string;
   }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -49,6 +52,15 @@ export default function Payment() {
   const [error, setError] = useState('');
 
   const amount = Number(total) || 0;
+
+  const onExpire = () => {
+    // Do not interrupt a payment that is already being processed.
+    if (loading) return;
+    router.replace({
+      pathname: '/booking/seats',
+      params: { id, cinema, date, time, showtimeId },
+    });
+  };
 
   const validate = () => {
     if (method === 'telebirr' && !/^(\+251|0)?9\d{8}$/.test(phone.replace(/\s/g, ''))) {
@@ -99,6 +111,10 @@ export default function Payment() {
           <Ionicons name="chevron-back" size={22} color={colors.text} />
         </Pressable>
         <Text style={{ color: colors.text, fontSize: 20, fontWeight: '800' }}>Payment</Text>
+      </View>
+
+      <View style={{ paddingHorizontal: 20, paddingTop: 12 }}>
+        <HoldTimer expiresAt={expiresAt} onExpire={onExpire} />
       </View>
 
       <ScrollView contentContainerStyle={{ padding: 20, gap: 16 }} keyboardShouldPersistTaps="handled">

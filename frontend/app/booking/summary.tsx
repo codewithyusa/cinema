@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../../src/theme/colors';
 import { getMovie } from '../../src/api/movies';
 import Poster from '../../src/components/Poster';
+import HoldTimer from '../../src/components/HoldTimer';
 import { VIP_PRICE, REGULAR_PRICE, isVip, seatsTotal } from '../../src/utils/pricing';
 import { Promo, discountFor, findPromo } from '../../src/utils/promo';
 
@@ -18,13 +19,15 @@ const snacks = [
 ];
 
 export default function Summary() {
-  const { id, cinema, date, time, seats } = useLocalSearchParams<{
+  const { id, cinema, date, time, seats, showtimeId, expiresAt } = useLocalSearchParams<{
     id: string;
     cinema: string;
     date: string;
     time: string;
     seats: string;
     total: string;
+    showtimeId?: string;
+    expiresAt?: string;
   }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -54,6 +57,12 @@ export default function Summary() {
     setPromoError('');
   };
 
+  const onExpire = () =>
+    router.replace({
+      pathname: '/booking/seats',
+      params: { id, cinema, date, time, showtimeId },
+    });
+
   const seatList = seats ? seats.split(',') : [];
   const vipCount = seatList.filter(isVip).length;
   const regularCount = seatList.length - vipCount;
@@ -73,6 +82,10 @@ export default function Summary() {
           <Ionicons name="chevron-back" size={22} color={colors.text} />
         </Pressable>
         <Text style={{ color: colors.text, fontSize: 20, fontWeight: '800' }}>Order summary</Text>
+      </View>
+
+      <View style={{ paddingHorizontal: 20, paddingTop: 12 }}>
+        <HoldTimer expiresAt={expiresAt} onExpire={onExpire} />
       </View>
 
       <ScrollView contentContainerStyle={{ padding: 20, gap: 16 }} keyboardShouldPersistTaps="handled">
@@ -226,7 +239,7 @@ export default function Summary() {
           onPress={() =>
             router.push({
               pathname: '/booking/payment',
-              params: { id, cinema, date, time, seats, total: String(grandTotal) },
+              params: { id, cinema, date, time, seats, showtimeId, expiresAt, total: String(grandTotal) },
             })
           }
           style={{ height: 52, paddingHorizontal: 28, borderRadius: 14, backgroundColor: colors.red, alignItems: 'center', justifyContent: 'center' }}
