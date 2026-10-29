@@ -8,7 +8,8 @@ export type SeatStatus = 'free' | 'taken' | 'held' | 'mine' | string;
 export type SeatGrid = {
   showtime_id: number;
   price_etb: number;
-  rows: { label: string; seats: { id: string; status: SeatStatus }[] }[];
+  vip_price_etb: number;
+  rows: { label: string; seats: { id: string; status: SeatStatus; vip: boolean }[] }[];
 };
 
 export type Booking = {

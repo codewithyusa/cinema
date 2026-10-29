@@ -89,14 +89,14 @@ export class BookingsService {
   quote(userId: number, dto: QuoteDto) {
     const showtime = this.cinemas.getShowtime(dto.showtimeId);
     const seats = this.liveHold(userId, dto.showtimeId);
-    const order = priceOrder(seats.length, showtime.price_etb, dto.snacks, dto.promoCode);
+    const order = priceOrder(seats, showtime.row_count, showtime.price_etb, dto.snacks, dto.promoCode);
     return { showtime_id: dto.showtimeId, seats, ...order };
   }
 
   create(userId: number, dto: CreateBookingDto) {
     const showtime = this.cinemas.getShowtime(dto.showtimeId);
     const seats = this.liveHold(userId, dto.showtimeId);
-    const order = priceOrder(seats.length, showtime.price_etb, dto.snacks, dto.promoCode);
+    const order = priceOrder(seats, showtime.row_count, showtime.price_etb, dto.snacks, dto.promoCode);
     // Demo payment: Telebirr and card count as paid. Real payment confirmation comes later.
     const paid = dto.method === 'cash' ? 0 : 1;
 

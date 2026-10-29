@@ -1,4 +1,5 @@
 import { BadRequestException } from '@nestjs/common';
+import { isVipSeat, vipPriceFor } from '../common/seat-class';
 
 // Prices are in ETB. They match the app's old dollar prices at about 50 ETB per dollar.
 export const BOOKING_FEE_ETB = 75;
@@ -33,15 +34,25 @@ export type Order = {
 };
 
 export function priceOrder(
-  seatCount: number,
+  seats: string[],
+  rowCount: number,
   seatPriceEtb: number,
   snacks: Record<string, number> = {},
   promoCode?: string,
 ): Order {
   const lines: OrderLine[] = [];
 
-  const seats_etb = seatCount * seatPriceEtb;
-  lines.push({ label: 'Seats', qty: seatCount, unit_etb: seatPriceEtb, total_etb: seats_etb });
+  const vipPrice = vipPriceFor(seatPriceEtb);
+  const vipCount = seats.filter((s) => isVipSeat(s, rowCount)).length;
+  const regularCount = seats.length - vipCount;
+
+  if (regularCount > 0) {
+    lines.push({ label: 'Regular seats', qty: regularCount, unit_etb: seatPriceEtb, total_etb: regularCount * seatPriceEtb });
+  }
+  if (vipCount > 0) {
+    lines.push({ label: 'VIP seats', qty: vipCount, unit_etb: vipPrice, total_etb: vipCount * vipPrice });
+  }
+  const seats_etb = regularCount * seatPriceEtb + vipCount * vipPrice;
 
   let snacks_etb = 0;
   for (const [id, qty] of Object.entries(snacks)) {

@@ -1,5 +1,6 @@
 import { BadRequestException, ConflictException, Injectable } from '@nestjs/common';
 import { CinemasService } from '../cinemas/cinemas.service';
+import { vipPriceFor } from '../common/seat-class';
 import { DatabaseService } from '../db/database.service';
 
 export type SeatStatus = 'free' | 'held' | 'mine' | 'taken';
@@ -59,17 +60,24 @@ export class SeatsService {
     const rows = [];
     for (let r = 0; r < showtime.row_count; r++) {
       const label = String.fromCharCode(65 + r);
+      // The last row of the hall is VIP.
+      const vip = r === showtime.row_count - 1;
       const seats = [];
       for (let n = 1; n <= showtime.seats_per_row; n++) {
         const id = `${label}${n}`;
         let status: SeatStatus = 'free';
         if (booked.has(id)) status = 'taken';
         else if (holds.has(id)) status = holds.get(id) === userId ? 'mine' : 'held';
-        seats.push({ id, status });
+        seats.push({ id, status, vip });
       }
       rows.push({ label, seats });
     }
-    return { showtime_id: showtimeId, price_etb: showtime.price_etb, rows };
+    return {
+      showtime_id: showtimeId,
+      price_etb: showtime.price_etb,
+      vip_price_etb: vipPriceFor(showtime.price_etb),
+      rows,
+    };
   }
 
   hold(showtimeId: number, userId: number, requested: string[]) {

@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '../../src/components/Icon';
@@ -7,6 +7,7 @@ import { colors } from '../../src/theme/colors';
 import { getMovie } from '../../src/api/movies';
 import { ApiError, SeatGrid, getSeats, holdSeats, releaseSeats } from '../../src/api/seats';
 
+const GOLD = '#F5C518';
 const MAX_SEATS = 6;
 
 export default function Seats() {
@@ -61,6 +62,12 @@ export default function Seats() {
     }, [load])
   );
 
+  const vipSeats = useMemo(() => {
+    const set = new Set<string>();
+    grid?.rows.forEach((r) => r.seats.forEach((s) => s.vip && set.add(s.id)));
+    return set;
+  }, [grid]);
+
   const toggle = (seat: string, status: string) => {
     if (status !== 'free' && status !== 'mine') return;
     setSelected((prev) =>
@@ -101,7 +108,8 @@ export default function Seats() {
   };
 
   const price = grid?.price_etb ?? 0;
-  const total = selected.length * price;
+  const vipPrice = grid?.vip_price_etb ?? 0;
+  const total = selected.reduce((sum, s) => sum + (vipSeats.has(s) ? vipPrice : price), 0);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg, paddingTop: insets.top + 12 }}>
@@ -164,7 +172,7 @@ export default function Seats() {
                         backgroundColor: isSelected ? colors.red : isTaken ? colors.bg : colors.border,
                         borderWidth: 1,
                         borderStyle: isTaken ? 'dashed' : 'solid',
-                        borderColor: isSelected ? colors.red : colors.muted,
+                        borderColor: isSelected ? colors.red : s.vip && !isTaken ? GOLD : colors.muted,
                       }}
                     />
                   );
@@ -178,6 +186,7 @@ export default function Seats() {
               { label: 'Available', bg: colors.border, border: colors.muted, dashed: false },
               { label: 'Selected', bg: colors.red, border: colors.red, dashed: false },
               { label: 'Taken', bg: colors.bg, border: colors.muted, dashed: true },
+              { label: 'VIP', bg: colors.border, border: GOLD, dashed: false },
             ].map((l) => (
               <View key={l.label} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                 <View
@@ -196,9 +205,15 @@ export default function Seats() {
             ))}
           </View>
 
-          <View style={{ backgroundColor: colors.surface, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 8 }}>
-            <Text style={{ color: colors.muted, fontSize: 12 }}>Price per seat</Text>
-            <Text style={{ color: colors.text, fontSize: 15, fontWeight: '800' }}>{price} ETB</Text>
+          <View style={{ flexDirection: 'row', gap: 12 }}>
+            <View style={{ backgroundColor: colors.surface, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 8 }}>
+              <Text style={{ color: colors.muted, fontSize: 12 }}>Regular</Text>
+              <Text style={{ color: colors.text, fontSize: 15, fontWeight: '800' }}>{price} ETB</Text>
+            </View>
+            <View style={{ backgroundColor: colors.surface, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 8, borderWidth: 1, borderColor: GOLD }}>
+              <Text style={{ color: GOLD, fontSize: 12 }}>VIP (last row)</Text>
+              <Text style={{ color: colors.text, fontSize: 15, fontWeight: '800' }}>{vipPrice} ETB</Text>
+            </View>
           </View>
 
           {error ? <Text style={{ color: colors.redText, fontSize: 13, textAlign: 'center' }}>{error}</Text> : null}

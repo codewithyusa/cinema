@@ -53,11 +53,14 @@ async function main() {
   const id = showtime.id;
   console.log(`      using showtime ${id} (${showtime.cinema_name}, ${showtime.starts_at}, ${showtime.price_etb} ETB)\n`);
 
-  // 4. Pick two free seats from the grid
+  // 4. Pick one regular seat and one VIP seat from the grid
   const grid = await call('GET', `/showtimes/${id}/seats`, tokenA);
-  const free = grid.data.rows.flatMap((r) => r.seats).filter((s) => s.status === 'free').map((s) => s.id);
-  check('at least 2 free seats', free.length >= 2, `free: ${free.length}`);
-  const seats = free.slice(-2);
+  const allSeats = grid.data.rows.flatMap((r) => r.seats);
+  const freeRegular = allSeats.filter((s) => s.status === 'free' && !s.vip).map((s) => s.id);
+  const freeVip = allSeats.filter((s) => s.status === 'free' && s.vip).map((s) => s.id);
+  check('a free regular seat and a free VIP seat exist', freeRegular.length >= 1 && freeVip.length >= 1, `regular ${freeRegular.length}, vip ${freeVip.length}`);
+  check('VIP price is 1.5 times regular', grid.data.vip_price_etb === Math.round(showtime.price_etb * 1.5), `got ${grid.data.vip_price_etb}`);
+  const seats = [freeRegular[freeRegular.length - 1], freeVip[freeVip.length - 1]];
   console.log(`      seats: ${seats.join(', ')}\n`);
 
   // 5. Hold
@@ -70,9 +73,14 @@ async function main() {
   // 6. Quote
   const snacks = { popcorn: 1, soda: 2 };
   const quote = await call('POST', '/bookings/quote', tokenA, { showtimeId: id, snacks, promoCode: 'YUSA10' });
-  const subtotal = showtime.price_etb * 2 + 800;
+  const subtotal = showtime.price_etb + grid.data.vip_price_etb + 800;
   const expected = subtotal - Math.round(subtotal * 0.1) + 75;
   check(`quote total is ${expected} ETB`, quote.data?.total_etb === expected, `got ${quote.data?.total_etb}`);
+  check(
+    'quote has a VIP seats line',
+    quote.data?.lines?.some((l) => l.label === 'VIP seats' && l.unit_etb === grid.data.vip_price_etb),
+    JSON.stringify(quote.data?.lines),
+  );
 
   const fake = await call('POST', '/bookings/quote', tokenA, { showtimeId: id, promoCode: 'FAKE' });
   check('fake promo code rejected (400)', fake.status === 400, `status ${fake.status}`);
