@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -28,7 +28,7 @@ const inputStyle = {
 } as const;
 
 export default function Payment() {
-  const { id, cinema, date, time, seats, total, showtimeId, expiresAt } = useLocalSearchParams<{
+  const { id, cinema, date, time, seats, total, showtimeId, expiresAt, snacks, promo } = useLocalSearchParams<{
     id: string;
     cinema: string;
     date: string;
@@ -37,6 +37,8 @@ export default function Payment() {
     total: string;
     showtimeId?: string;
     expiresAt?: string;
+    snacks?: string;
+    promo?: string;
   }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -50,7 +52,15 @@ export default function Payment() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const amount = Number(total) || 0;
+  const amount = Math.round(Number(total) || 0);
+
+  const snackMap = useMemo<Record<string, number>>(() => {
+    try {
+      return snacks ? JSON.parse(snacks) : {};
+    } catch {
+      return {};
+    }
+  }, [snacks]);
 
   const onExpire = () => {
     // Do not interrupt a payment that is already being processed.
@@ -80,8 +90,9 @@ export default function Payment() {
 
     setLoading(true);
     try {
-      // Card details stay on the phone. Only the payment method goes to the server.
-      const booking = await createBooking(showtimeId ?? '1', method);
+      // Card details stay on the phone. The server gets the method, snacks and promo code,
+      // and it works out the price itself.
+      const booking = await createBooking(showtimeId ?? '1', method, snackMap, promo);
       router.replace({
         pathname: '/booking/ticket',
         params: {
@@ -90,7 +101,7 @@ export default function Payment() {
           date,
           time,
           seats: booking.seats.join(','),
-          total: String(amount),
+          total: String(booking.total_etb),
           code: booking.code,
           method,
           paid: booking.paid ? '1' : '0',
@@ -265,7 +276,7 @@ export default function Payment() {
       >
         <View>
           <Text style={{ color: colors.muted, fontSize: 13 }}>Total</Text>
-          <Text style={{ color: colors.text, fontSize: 22, fontWeight: '800' }}>${amount.toFixed(2)}</Text>
+          <Text style={{ color: colors.text, fontSize: 22, fontWeight: '800' }}>{amount} ETB</Text>
         </View>
         <Pressable
           onPress={pay}
@@ -285,7 +296,7 @@ export default function Payment() {
             <ActivityIndicator color="#fff" />
           ) : (
             <Text style={{ color: '#fff', fontSize: 16, fontWeight: '800' }}>
-              {method === 'cash' ? 'Reserve' : `Pay $${amount.toFixed(2)}`}
+              {method === 'cash' ? 'Reserve' : `Pay ${amount} ETB`}
             </Text>
           )}
         </Pressable>

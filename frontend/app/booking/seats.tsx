@@ -5,10 +5,8 @@ import { Ionicons } from '../../src/components/Icon';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../../src/theme/colors';
 import { getMovie } from '../../src/api/movies';
-import { REGULAR_PRICE, VIP_PRICE, isVip, seatsTotal } from '../../src/utils/pricing';
 import { ApiError, SeatGrid, getSeats, holdSeats, releaseSeats } from '../../src/api/seats';
 
-const GOLD = '#F5C518';
 const MAX_SEATS = 6;
 
 export default function Seats() {
@@ -19,7 +17,6 @@ export default function Seats() {
     time: string;
     showtimeId?: string;
   }>();
-  // Until showtimes come from the server, every showtime uses server showtime 1.
   const showtimeId = showtimeParam ?? '1';
 
   const router = useRouter();
@@ -92,7 +89,6 @@ export default function Seats() {
           time,
           showtimeId,
           seats: selected.join(','),
-          total: String(seatsTotal(selected)),
           expiresAt: hold.expires_at,
         },
       });
@@ -104,7 +100,8 @@ export default function Seats() {
     }
   };
 
-  const total = seatsTotal(selected);
+  const price = grid?.price_etb ?? 0;
+  const total = selected.length * price;
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg, paddingTop: insets.top + 12 }}>
@@ -154,7 +151,6 @@ export default function Seats() {
                 {row.seats.map((s, i) => {
                   const isSelected = selected.includes(s.id);
                   const isTaken = s.status !== 'free' && s.status !== 'mine';
-                  const vip = isVip(s.id);
                   return (
                     <Pressable
                       key={s.id}
@@ -168,7 +164,7 @@ export default function Seats() {
                         backgroundColor: isSelected ? colors.red : isTaken ? colors.bg : colors.border,
                         borderWidth: 1,
                         borderStyle: isTaken ? 'dashed' : 'solid',
-                        borderColor: isSelected ? colors.red : vip && !isTaken ? GOLD : colors.muted,
+                        borderColor: isSelected ? colors.red : colors.muted,
                       }}
                     />
                   );
@@ -182,7 +178,6 @@ export default function Seats() {
               { label: 'Available', bg: colors.border, border: colors.muted, dashed: false },
               { label: 'Selected', bg: colors.red, border: colors.red, dashed: false },
               { label: 'Taken', bg: colors.bg, border: colors.muted, dashed: true },
-              { label: 'VIP', bg: colors.border, border: GOLD, dashed: false },
             ].map((l) => (
               <View key={l.label} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                 <View
@@ -201,15 +196,9 @@ export default function Seats() {
             ))}
           </View>
 
-          <View style={{ flexDirection: 'row', gap: 12 }}>
-            <View style={{ backgroundColor: colors.surface, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 8 }}>
-              <Text style={{ color: colors.muted, fontSize: 12 }}>Regular (A to E)</Text>
-              <Text style={{ color: colors.text, fontSize: 15, fontWeight: '800' }}>${REGULAR_PRICE.toFixed(2)}</Text>
-            </View>
-            <View style={{ backgroundColor: colors.surface, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 8, borderWidth: 1, borderColor: GOLD }}>
-              <Text style={{ color: GOLD, fontSize: 12 }}>VIP (F)</Text>
-              <Text style={{ color: colors.text, fontSize: 15, fontWeight: '800' }}>${VIP_PRICE.toFixed(2)}</Text>
-            </View>
+          <View style={{ backgroundColor: colors.surface, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 8 }}>
+            <Text style={{ color: colors.muted, fontSize: 12 }}>Price per seat</Text>
+            <Text style={{ color: colors.text, fontSize: 15, fontWeight: '800' }}>{price} ETB</Text>
           </View>
 
           {error ? <Text style={{ color: colors.redText, fontSize: 13, textAlign: 'center' }}>{error}</Text> : null}
@@ -232,7 +221,7 @@ export default function Seats() {
           <Text numberOfLines={1} style={{ color: colors.muted, fontSize: 13 }}>
             {selected.length ? `${selected.length} seat${selected.length > 1 ? 's' : ''} · ${selected.join(', ')}` : 'No seats selected'}
           </Text>
-          <Text style={{ color: colors.text, fontSize: 22, fontWeight: '800' }}>${total.toFixed(2)}</Text>
+          <Text style={{ color: colors.text, fontSize: 22, fontWeight: '800' }}>{total} ETB</Text>
         </View>
         <Pressable
           disabled={!selected.length || holding}

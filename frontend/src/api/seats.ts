@@ -20,6 +20,19 @@ export type Booking = {
   paid: boolean;
 };
 
+export type Quote = {
+  showtime_id: number;
+  seats: string[];
+  lines: { label: string; qty: number; unit_etb: number; total_etb: number }[];
+  seats_etb: number;
+  snacks_etb: number;
+  subtotal_etb: number;
+  discount_etb: number;
+  promo: { code: string; label: string } | null;
+  fee_etb: number;
+  total_etb: number;
+};
+
 export class ApiError extends Error {
   status: number;
   constructor(message: string, status: number) {
@@ -32,10 +45,16 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const token = getToken();
   if (!token) throw new ApiError('Please sign in again.', 401);
 
-  const res = await fetch(`${API_URL}${path}`, {
-    ...init,
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}${path}`, {
+      ...init,
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    });
+  } catch {
+    throw new ApiError('Cannot reach the server. Check that the backend is running.', 0);
+  }
+
   const body = await res.json().catch(() => null);
   if (!res.ok) {
     if (res.status === 401) throw new ApiError('Your session expired. Please sign in again.', 401);
@@ -56,8 +75,24 @@ export const holdSeats = (showtimeId: string, seats: string[]) =>
 export const releaseSeats = (showtimeId: string) =>
   request<{ released: boolean }>(`/showtimes/${showtimeId}/seats/hold`, { method: 'DELETE' });
 
-export const createBooking = (showtimeId: string, method: 'telebirr' | 'card' | 'cash') =>
+export const getQuote = (showtimeId: string, snacks: Record<string, number>, promoCode?: string) =>
+  request<Quote>('/bookings/quote', {
+    method: 'POST',
+    body: JSON.stringify({ showtimeId: Number(showtimeId), snacks, promoCode: promoCode || undefined }),
+  });
+
+export const createBooking = (
+  showtimeId: string,
+  method: 'telebirr' | 'card' | 'cash',
+  snacks: Record<string, number>,
+  promoCode?: string,
+) =>
   request<Booking>('/bookings', {
     method: 'POST',
-    body: JSON.stringify({ showtimeId: Number(showtimeId), method }),
+    body: JSON.stringify({
+      showtimeId: Number(showtimeId),
+      method,
+      snacks,
+      promoCode: promoCode || undefined,
+    }),
   });

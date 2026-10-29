@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '../../src/components/Icon';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -7,16 +7,19 @@ import { colors } from '../../src/theme/colors';
 import { getMovie } from '../../src/api/movies';
 import Poster from '../../src/components/Poster';
 import HoldTimer from '../../src/components/HoldTimer';
-import { VIP_PRICE, REGULAR_PRICE, isVip, seatsTotal } from '../../src/utils/pricing';
-import { Promo, discountFor, findPromo } from '../../src/utils/promo';
+import { ApiError, Quote, getQuote } from '../../src/api/seats';
 
-const FEE = 1.5;
-
+// Display prices. The server uses the same ids and sets the real price.
 const snacks = [
-  { id: 'popcorn', name: 'Popcorn combo', desc: 'Large popcorn + 2 drinks', price: 8 },
-  { id: 'nachos', name: 'Nachos', desc: 'With cheese dip', price: 6 },
-  { id: 'soda', name: 'Soda', desc: 'Medium', price: 4 },
+  { id: 'popcorn', name: 'Popcorn combo', desc: 'Large popcorn + 2 drinks', price: 400 },
+  { id: 'nachos', name: 'Nachos', desc: 'With cheese dip', price: 300 },
+  { id: 'soda', name: 'Soda', desc: 'Medium', price: 200 },
 ];
+
+const etb = (n: number) => `${Math.round(n)} ETB`;
+
+const pickSnacks = (qty: Record<string, number>) =>
+  Object.fromEntries(Object.entries(qty).filter(([, n]) => n > 0));
 
 export default function Summary() {
   const { id, cinema, date, time, seats, showtimeId, expiresAt } = useLocalSearchParams<{
@@ -25,52 +28,71 @@ export default function Summary() {
     date: string;
     time: string;
     seats: string;
-    total: string;
     showtimeId?: string;
     expiresAt?: string;
   }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const movie = getMovie(id);
+  const showtime = showtimeId ?? '1';
+  const seatList = seats ? seats.split(',') : [];
+
   const [qty, setQty] = useState<Record<string, number>>({});
   const [promoInput, setPromoInput] = useState('');
-  const [promo, setPromo] = useState<Promo | null>(null);
+  const [promo, setPromo] = useState('');
   const [promoError, setPromoError] = useState('');
+  const [quote, setQuote] = useState<Quote | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const latest = useRef(0);
+
+  // Ask the server for the price whenever snacks or the promo code change.
+  useEffect(() => {
+    const run = ++latest.current;
+    setLoading(true);
+    const timer = setTimeout(async () => {
+      try {
+        const q = await getQuote(showtime, pickSnacks(qty), promo);
+        if (run !== latest.current) return;
+        setQuote(q);
+        setError('');
+      } catch (e) {
+        if (run !== latest.current) return;
+        setError(e instanceof ApiError ? e.message : 'Cannot reach the server.');
+      } finally {
+        if (run === latest.current) setLoading(false);
+      }
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [qty, promo, showtime]);
 
   const change = (snackId: string, delta: number) =>
     setQty((prev) => ({ ...prev, [snackId]: Math.max(0, (prev[snackId] ?? 0) + delta) }));
 
-  const applyPromo = () => {
-    const found = findPromo(promoInput);
-    if (found) {
-      setPromo(found);
+  const applyPromo = async () => {
+    const code = promoInput.trim().toUpperCase();
+    if (!code) return;
+    try {
+      await getQuote(showtime, pickSnacks(qty), code);
+      setPromo(code);
       setPromoError('');
-    } else {
-      setPromo(null);
-      setPromoError('This code is not valid');
+    } catch (e) {
+      setPromo('');
+      setPromoError(e instanceof ApiError ? e.message : 'Cannot reach the server.');
     }
   };
 
   const removePromo = () => {
-    setPromo(null);
+    setPromo('');
     setPromoInput('');
     setPromoError('');
   };
 
-  const onExpire = () =>
+  const backToSeats = () =>
     router.replace({
       pathname: '/booking/seats',
       params: { id, cinema, date, time, showtimeId },
     });
-
-  const seatList = seats ? seats.split(',') : [];
-  const vipCount = seatList.filter(isVip).length;
-  const regularCount = seatList.length - vipCount;
-  const tickets = seatsTotal(seatList);
-  const snackTotal = snacks.reduce((sum, s) => sum + s.price * (qty[s.id] ?? 0), 0);
-  const subtotal = tickets + snackTotal;
-  const discount = promo ? discountFor(promo, subtotal) : 0;
-  const grandTotal = subtotal - discount + FEE;
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg, paddingTop: insets.top + 12 }}>
@@ -85,7 +107,7 @@ export default function Summary() {
       </View>
 
       <View style={{ paddingHorizontal: 20, paddingTop: 12 }}>
-        <HoldTimer expiresAt={expiresAt} onExpire={onExpire} />
+        <HoldTimer expiresAt={expiresAt} onExpire={backToSeats} />
       </View>
 
       <ScrollView contentContainerStyle={{ padding: 20, gap: 16 }} keyboardShouldPersistTaps="handled">
@@ -118,7 +140,7 @@ export default function Summary() {
               <View>
                 <Text style={{ color: colors.text, fontSize: 14, fontWeight: '700' }}>{s.name}</Text>
                 <Text style={{ color: colors.muted, fontSize: 12 }}>
-                  {s.desc} · ${s.price.toFixed(2)}
+                  {s.desc} · {etb(s.price)}
                 </Text>
               </View>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
@@ -156,7 +178,8 @@ export default function Summary() {
             }}
           >
             <Text style={{ color: colors.text, fontSize: 14, fontWeight: '700' }}>
-              {promo.code} · {promo.label}
+              {promo}
+              {quote?.promo ? ` · ${quote.promo.label}` : ''}
             </Text>
             <Pressable onPress={removePromo}>
               <Text style={{ color: colors.redText, fontSize: 13, fontWeight: '800' }}>Remove</Text>
@@ -206,17 +229,29 @@ export default function Summary() {
           </View>
         )}
 
-        <View style={{ gap: 8 }}>
-          {regularCount > 0 ? (
-            <Row label={`Regular seats (${regularCount} × $${REGULAR_PRICE})`} value={regularCount * REGULAR_PRICE} />
-          ) : null}
-          {vipCount > 0 ? (
-            <Row label={`VIP seats (${vipCount} × $${VIP_PRICE})`} value={vipCount * VIP_PRICE} />
-          ) : null}
-          <Row label="Snacks" value={snackTotal} />
-          {discount > 0 ? <Row label={`Discount (${promo?.code})`} value={discount} negative /> : null}
-          <Row label="Booking fee" value={FEE} />
-        </View>
+        {error ? (
+          <View style={{ gap: 10 }}>
+            <Text style={{ color: colors.redText, fontSize: 13 }}>{error}</Text>
+            <Pressable
+              onPress={backToSeats}
+              style={{ height: 44, borderRadius: 12, borderWidth: 1, borderColor: colors.red, alignItems: 'center', justifyContent: 'center' }}
+            >
+              <Text style={{ color: colors.redText, fontWeight: '800' }}>Select seats again</Text>
+            </Pressable>
+          </View>
+        ) : null}
+
+        {quote ? (
+          <View style={{ gap: 8, opacity: loading ? 0.5 : 1 }}>
+            {quote.lines.map((l) => (
+              <Row key={l.label} label={`${l.label} (${l.qty} × ${etb(l.unit_etb)})`} value={etb(l.total_etb)} />
+            ))}
+            {quote.discount_etb > 0 ? (
+              <Row label={`Discount (${quote.promo?.code ?? ''})`} value={`-${etb(quote.discount_etb)}`} negative />
+            ) : null}
+            <Row label="Booking fee" value={etb(quote.fee_etb)} />
+          </View>
+        ) : null}
       </ScrollView>
 
       <View
@@ -233,16 +268,41 @@ export default function Summary() {
       >
         <View>
           <Text style={{ color: colors.muted, fontSize: 13 }}>Total</Text>
-          <Text style={{ color: colors.text, fontSize: 22, fontWeight: '800' }}>${grandTotal.toFixed(2)}</Text>
+          {quote ? (
+            <Text style={{ color: colors.text, fontSize: 22, fontWeight: '800', opacity: loading ? 0.5 : 1 }}>
+              {etb(quote.total_etb)}
+            </Text>
+          ) : (
+            <ActivityIndicator color={colors.red} />
+          )}
         </View>
         <Pressable
+          disabled={!quote || loading || !!error}
           onPress={() =>
             router.push({
               pathname: '/booking/payment',
-              params: { id, cinema, date, time, seats, showtimeId, expiresAt, total: String(grandTotal) },
+              params: {
+                id,
+                cinema,
+                date,
+                time,
+                seats,
+                showtimeId: showtime,
+                expiresAt,
+                total: String(quote?.total_etb ?? 0),
+                snacks: JSON.stringify(pickSnacks(qty)),
+                promo,
+              },
             })
           }
-          style={{ height: 52, paddingHorizontal: 28, borderRadius: 14, backgroundColor: colors.red, alignItems: 'center', justifyContent: 'center' }}
+          style={{
+            height: 52,
+            paddingHorizontal: 28,
+            borderRadius: 14,
+            backgroundColor: !quote || loading || error ? colors.border : colors.red,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
         >
           <Text style={{ color: '#fff', fontSize: 16, fontWeight: '800' }}>Go to payment</Text>
         </Pressable>
@@ -251,13 +311,11 @@ export default function Summary() {
   );
 }
 
-function Row({ label, value, negative }: { label: string; value: number; negative?: boolean }) {
+function Row({ label, value, negative }: { label: string; value: string; negative?: boolean }) {
   return (
     <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
       <Text style={{ color: colors.muted, fontSize: 14 }}>{label}</Text>
-      <Text style={{ color: negative ? colors.redText : colors.text, fontSize: 14 }}>
-        {negative ? '-' : ''}${value.toFixed(2)}
-      </Text>
+      <Text style={{ color: negative ? colors.redText : colors.text, fontSize: 14 }}>{value}</Text>
     </View>
   );
 }
