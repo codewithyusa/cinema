@@ -106,6 +106,23 @@ async function main() {
   const none = await call('GET', '/bookings', tokenB);
   check('other user does not see my booking', Array.isArray(none.data) && none.data.length === 0);
 
+  // 8b. Cancel
+  const stranger = await call('DELETE', `/bookings/${booking.data?.code}`, tokenB);
+  check('other user cannot cancel my booking (404)', stranger.status === 404, `status ${stranger.status}`);
+
+  const cancel = await call('DELETE', `/bookings/${booking.data?.code}`, tokenA);
+  check('cancel works', cancel.status < 300 && cancel.data?.cancelled === true, JSON.stringify(cancel.data));
+
+  const gridAfter = await call('GET', `/showtimes/${id}/seats`, tokenB);
+  const statusAfter = (s) => gridAfter.data.rows.flatMap((r) => r.seats).find((x) => x.id === s)?.status;
+  check('cancelled seats are free again', seats.every((s) => statusAfter(s) === 'free'), seats.map(statusAfter).join(','));
+
+  const listAfter = await call('GET', '/bookings', tokenA);
+  check('cancelled booking leaves my list', !listAfter.data?.some((b) => b.code === booking.data?.code));
+
+  const twice = await call('DELETE', `/bookings/${booking.data?.code}`, tokenA);
+  check('cancelling twice is harmless', twice.status < 300 && twice.data?.cancelled === true, `status ${twice.status}`);
+
   // 9. Security
   const noToken = await call('POST', '/bookings', null, { showtimeId: id, method: 'cash' });
   check('booking without a token rejected (401)', noToken.status === 401, `status ${noToken.status}`);

@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, Injectable } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { randomBytes } from 'node:crypto';
 import { CinemasService } from '../cinemas/cinemas.service';
 import { DatabaseService } from '../db/database.service';
@@ -15,6 +15,7 @@ type BookingRow = {
   method: string;
   paid: number;
   created_at: string;
+  cancelled_at: string | null;
 };
 
 const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -38,6 +39,10 @@ export class BookingsService {
         created_at TEXT NOT NULL DEFAULT (datetime('now'))
       )
     `);
+    // Older databases do not have this column yet. The error means it already exists.
+    try {
+      this.db.run('ALTER TABLE bookings ADD COLUMN cancelled_at TEXT');
+    } catch {}
   }
 
   private makeCode() {
@@ -129,9 +134,39 @@ export class BookingsService {
 
   list(userId: number) {
     const rows = this.db.all<BookingRow>(
-      'SELECT * FROM bookings WHERE user_id = ? ORDER BY id DESC',
+      'SELECT * FROM bookings WHERE user_id = ? AND cancelled_at IS NULL ORDER BY id DESC',
       userId,
     );
     return rows.map((r) => this.present(r));
+  }
+
+  // Frees the seats of a booking. Only the owner can cancel, and only before the show starts.
+  cancel(userId: number, rawCode: string) {
+    const code = rawCode.trim().toUpperCase();
+    const row = this.db.get<BookingRow>(
+      'SELECT * FROM bookings WHERE code = ? AND user_id = ?',
+      code,
+      userId,
+    );
+    if (!row) throw new NotFoundException('Booking not found.');
+
+    // Cancelling twice is harmless.
+    if (row.cancelled_at) return { cancelled: true, code };
+
+    const showtime = this.cinemas.getShowtime(row.showtime_id);
+    if (new Date(showtime.starts_at).getTime() <= Date.now()) {
+      throw new BadRequestException('This showtime has already started, so the booking cannot be cancelled.');
+    }
+
+    this.db.run('BEGIN IMMEDIATE');
+    try {
+      this.db.run('DELETE FROM booked_seats WHERE booking_id = ?', row.id);
+      this.db.run('UPDATE bookings SET cancelled_at = ? WHERE id = ?', new Date().toISOString(), row.id);
+      this.db.run('COMMIT');
+    } catch (e) {
+      this.db.run('ROLLBACK');
+      throw e;
+    }
+    return { cancelled: true, code };
   }
 }

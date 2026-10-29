@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
-import { Pressable, ScrollView, Share, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, Share, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '../../src/components/Icon';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import QRCode from 'react-native-qrcode-svg';
 import { colors } from '../../src/theme/colors';
 import { getMovie } from '../../src/api/movies';
+import { ApiError, cancelBooking } from '../../src/api/seats';
 import { removeTicket, saveTicket } from '../../src/store/tickets';
 import { notifyBooking } from '../../src/store/notifications';
 import { useAuth } from '../../src/store/authStore';
@@ -34,10 +35,12 @@ export default function Ticket() {
   const { user } = useAuth();
   const movie = getMovie(id);
   const [confirming, setConfirming] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+  const [cancelError, setCancelError] = useState('');
 
   const isSavedView = view === '1';
   const isCash = method === 'cash';
-  const amount = (Number(total) || 0).toFixed(2);
+  const amount = Math.round(Number(total) || 0);
   const seatText = seats?.split(',').join(', ');
   // The server makes the booking code. The old formula is only a fallback
   // for tickets saved before the server existed.
@@ -71,6 +74,18 @@ export default function Ticket() {
 
   const cancelTicket = async () => {
     if (!user) return;
+    setCancelling(true);
+    setCancelError('');
+    try {
+      await cancelBooking(bookingCode);
+    } catch (e) {
+      // 404 means the ticket was made before the server existed. There is nothing to free.
+      if (!(e instanceof ApiError && e.status === 404)) {
+        setCancelError(e instanceof ApiError ? e.message : 'Could not cancel. Try again.');
+        setCancelling(false);
+        return;
+      }
+    }
     await removeTicket(user.email, bookingCode);
     router.replace('/tickets');
   };
@@ -82,7 +97,7 @@ export default function Ticket() {
       `📅 ${date} · ${time}`,
       `💺 Seats: ${seatText}`,
       `🎟 Booking code: ${bookingCode}`,
-      isCash ? `💵 To pay at cinema: $${amount}` : `✅ Paid: $${amount}`,
+      isCash ? `💵 To pay at cinema: ${amount} ETB` : `✅ Paid: ${amount} ETB`,
       '',
       'Booked with YUSA CINEMA',
     ].join('\n');
@@ -148,7 +163,7 @@ export default function Ticket() {
 
           <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
             <Info label={isCash ? 'Payment' : 'Paid with'} value={methodNames[method ?? ''] ?? method} />
-            <Info label={isCash ? 'To pay' : 'Total'} value={`$${amount}`} />
+            <Info label={isCash ? 'To pay' : 'Total'} value={`${amount} ETB`} />
           </View>
         </View>
 
@@ -173,22 +188,36 @@ export default function Ticket() {
         {isSavedView ? (
           confirming ? (
             <View style={{ backgroundColor: colors.surface, borderRadius: 18, padding: 16, gap: 12 }}>
-              <Text style={{ color: colors.text, fontSize: 15, fontWeight: '800' }}>Cancel this ticket?</Text>
+              <Text style={{ color: colors.text, fontSize: 15, fontWeight: '800' }}>Cancel this booking?</Text>
               <Text style={{ color: colors.muted, fontSize: 13 }}>
-                The ticket will be removed from your phone. This cannot be undone.
+                Your seats will be released for other people and the ticket will be removed. This cannot be undone.
               </Text>
+              {cancelError ? <Text style={{ color: colors.redText, fontSize: 13 }}>{cancelError}</Text> : null}
               <View style={{ flexDirection: 'row', gap: 10 }}>
                 <Pressable
-                  onPress={() => setConfirming(false)}
+                  onPress={() => {
+                    setConfirming(false);
+                    setCancelError('');
+                  }}
+                  disabled={cancelling}
                   style={{ flex: 1, height: 46, borderRadius: 12, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' }}
                 >
                   <Text style={{ color: colors.text, fontWeight: '700' }}>Keep ticket</Text>
                 </Pressable>
                 <Pressable
                   onPress={cancelTicket}
-                  style={{ flex: 1, height: 46, borderRadius: 12, backgroundColor: colors.red, alignItems: 'center', justifyContent: 'center' }}
+                  disabled={cancelling}
+                  style={{
+                    flex: 1,
+                    height: 46,
+                    borderRadius: 12,
+                    backgroundColor: colors.red,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    opacity: cancelling ? 0.7 : 1,
+                  }}
                 >
-                  <Text style={{ color: '#fff', fontWeight: '800' }}>Yes, cancel</Text>
+                  {cancelling ? <ActivityIndicator color="#fff" /> : <Text style={{ color: '#fff', fontWeight: '800' }}>Yes, cancel</Text>}
                 </Pressable>
               </View>
             </View>
@@ -207,7 +236,7 @@ export default function Ticket() {
               }}
             >
               <Ionicons name="trash-outline" size={18} color={colors.redText} />
-              <Text style={{ color: colors.redText, fontSize: 16, fontWeight: '800' }}>Cancel ticket</Text>
+              <Text style={{ color: colors.redText, fontSize: 16, fontWeight: '800' }}>Cancel booking</Text>
             </Pressable>
           )
         ) : null}

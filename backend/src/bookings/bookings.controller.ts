@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Req, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CreateBookingDto, QuoteDto } from './bookings.dto';
 import { BookingsService } from './bookings.service';
@@ -21,5 +21,10 @@ export class BookingsController {
   @Get()
   list(@Req() req: { user: { id: number } }) {
     return this.bookings.list(req.user.id);
+  }
+
+  @Delete(':code')
+  cancel(@Param('code') code: string, @Req() req: { user: { id: number } }) {
+    return this.bookings.cancel(req.user.id, code);
   }
 }
