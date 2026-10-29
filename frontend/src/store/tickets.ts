@@ -34,6 +34,13 @@ export async function saveTicket(email: string, ticket: SavedTicket): Promise<bo
   }
 }
 
+// Replaces the whole saved list. Used when the server list is the source of truth.
+export async function setTickets(email: string, tickets: SavedTicket[]): Promise<void> {
+  try {
+    await AsyncStorage.setItem(keyFor(email), JSON.stringify(tickets));
+  } catch {}
+}
+
 export async function removeTicket(email: string, code: string): Promise<void> {
   try {
     const all = await getTickets(email);

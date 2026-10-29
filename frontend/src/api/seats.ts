@@ -20,6 +20,22 @@ export type Booking = {
   paid: boolean;
 };
 
+export type ServerBooking = {
+  id: number;
+  code: string;
+  showtime_id: number;
+  movie_id: number;
+  movie_title: string;
+  cinema_name: string;
+  hall_name: string;
+  starts_at: string;
+  seats: string[];
+  total_etb: number;
+  method: string;
+  paid: boolean;
+  created_at: string;
+};
+
 export type Quote = {
   showtime_id: number;
   seats: string[];
@@ -96,3 +112,10 @@ export const createBooking = (
       promoCode: promoCode || undefined,
     }),
   });
+
+export const cancelBooking = (code: string) =>
+  request<{ cancelled: boolean; code: string }>(`/bookings/${encodeURIComponent(code)}`, {
+    method: 'DELETE',
+  });
+
+export const getBookings = () => request<ServerBooking[]>('/bookings');

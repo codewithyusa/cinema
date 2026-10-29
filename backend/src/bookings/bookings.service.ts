@@ -72,6 +72,7 @@ export class BookingsService {
       id: row.id,
       code: row.code,
       showtime_id: row.showtime_id,
+      movie_id: showtime.movie_id,
       movie_title: showtime.movie_title,
       cinema_name: showtime.cinema_name,
       hall_name: showtime.hall_name,
