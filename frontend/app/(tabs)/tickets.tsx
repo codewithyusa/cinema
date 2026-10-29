@@ -52,6 +52,7 @@ export default function Tickets() {
                       seats: t.seats,
                       total: t.total,
                       method: t.method,
+                      code: t.code,
                       view: '1',
                     },
                   })
