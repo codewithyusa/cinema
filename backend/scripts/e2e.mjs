@@ -103,6 +103,10 @@ async function main() {
   const list = await call('GET', '/bookings', tokenA);
   check('booking appears in my bookings', list.data?.some((b) => b.code === booking.data?.code));
 
+  const mine = list.data?.find((b) => b.code === booking.data?.code);
+  check('booking list includes the movie id', mine?.movie_id === 2, JSON.stringify(mine));
+  check('booking list includes cinema and seats', !!mine?.cinema_name && mine?.seats?.length === 2, JSON.stringify(mine));
+
   const none = await call('GET', '/bookings', tokenB);
   check('other user does not see my booking', Array.isArray(none.data) && none.data.length === 0);
 
