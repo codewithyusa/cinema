@@ -2,6 +2,8 @@ import { BadRequestException, ConflictException, Injectable } from '@nestjs/comm
 import { randomBytes } from 'node:crypto';
 import { CinemasService } from '../cinemas/cinemas.service';
 import { DatabaseService } from '../db/database.service';
+import { CreateBookingDto, QuoteDto } from './bookings.dto';
+import { priceOrder } from './pricing';
 
 type BookingRow = {
   id: number;
@@ -45,6 +47,20 @@ export class BookingsService {
     return code;
   }
 
+  // The seats come from this user's own live hold, never from the app.
+  private liveHold(userId: number, showtimeId: number): string[] {
+    const holds = this.db.all<{ seat: string }>(
+      'SELECT seat FROM seat_holds WHERE showtime_id = ? AND user_id = ? AND expires_at > ? ORDER BY seat',
+      showtimeId,
+      userId,
+      new Date().toISOString(),
+    );
+    if (holds.length === 0) {
+      throw new BadRequestException('Your seat hold has expired or was never made. Select seats again.');
+    }
+    return holds.map((h) => h.seat);
+  }
+
   private present(row: BookingRow) {
     const showtime = this.cinemas.getShowtime(row.showtime_id);
     return {
@@ -63,24 +79,20 @@ export class BookingsService {
     };
   }
 
-  create(userId: number, showtimeId: number, method: 'telebirr' | 'card' | 'cash') {
-    const showtime = this.cinemas.getShowtime(showtimeId);
+  // Shows the price of the order without booking anything.
+  quote(userId: number, dto: QuoteDto) {
+    const showtime = this.cinemas.getShowtime(dto.showtimeId);
+    const seats = this.liveHold(userId, dto.showtimeId);
+    const order = priceOrder(seats.length, showtime.price_etb, dto.snacks, dto.promoCode);
+    return { showtime_id: dto.showtimeId, seats, ...order };
+  }
 
-    // The seats come from this user's own live hold, never from the app.
-    const holds = this.db.all<{ seat: string }>(
-      'SELECT seat FROM seat_holds WHERE showtime_id = ? AND user_id = ? AND expires_at > ? ORDER BY seat',
-      showtimeId,
-      userId,
-      new Date().toISOString(),
-    );
-    if (holds.length === 0) {
-      throw new BadRequestException('Your seat hold has expired or was never made. Select seats again.');
-    }
-
-    const seats = holds.map((h) => h.seat);
-    const total = showtime.price_etb * seats.length;
+  create(userId: number, dto: CreateBookingDto) {
+    const showtime = this.cinemas.getShowtime(dto.showtimeId);
+    const seats = this.liveHold(userId, dto.showtimeId);
+    const order = priceOrder(seats.length, showtime.price_etb, dto.snacks, dto.promoCode);
     // Demo payment: Telebirr and card count as paid. Real payment confirmation comes later.
-    const paid = method === 'cash' ? 0 : 1;
+    const paid = dto.method === 'cash' ? 0 : 1;
 
     this.db.run('BEGIN IMMEDIATE');
     try {
@@ -89,7 +101,7 @@ export class BookingsService {
 
       const result = this.db.run(
         'INSERT INTO bookings (code, user_id, showtime_id, seats, total_etb, method, paid) VALUES (?, ?, ?, ?, ?, ?, ?)',
-        code, userId, showtimeId, seats.join(','), total, method, paid,
+        code, userId, dto.showtimeId, seats.join(','), order.total_etb, dto.method, paid,
       );
       const bookingId = Number(result.lastInsertRowid);
 
@@ -97,17 +109,18 @@ export class BookingsService {
         try {
           this.db.run(
             'INSERT INTO booked_seats (showtime_id, seat, booking_id) VALUES (?, ?, ?)',
-            showtimeId, seat, bookingId,
+            dto.showtimeId, seat, bookingId,
           );
         } catch {
           throw new ConflictException(`Seat ${seat} was just booked by someone else.`);
         }
       }
 
-      this.db.run('DELETE FROM seat_holds WHERE showtime_id = ? AND user_id = ?', showtimeId, userId);
+      this.db.run('DELETE FROM seat_holds WHERE showtime_id = ? AND user_id = ?', dto.showtimeId, userId);
       this.db.run('COMMIT');
 
-      return this.present(this.db.get<BookingRow>('SELECT * FROM bookings WHERE id = ?', bookingId)!);
+      const row = this.db.get<BookingRow>('SELECT * FROM bookings WHERE id = ?', bookingId)!;
+      return { ...this.present(row), breakdown: order };
     } catch (e) {
       this.db.run('ROLLBACK');
       throw e;

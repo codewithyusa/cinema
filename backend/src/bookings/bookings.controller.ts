@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Post, Req, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { CreateBookingDto } from './bookings.dto';
+import { CreateBookingDto, QuoteDto } from './bookings.dto';
 import { BookingsService } from './bookings.service';
 
 @Controller('bookings')
@@ -8,9 +8,14 @@ import { BookingsService } from './bookings.service';
 export class BookingsController {
   constructor(private readonly bookings: BookingsService) {}
 
+  @Post('quote')
+  quote(@Body() dto: QuoteDto, @Req() req: { user: { id: number } }) {
+    return this.bookings.quote(req.user.id, dto);
+  }
+
   @Post()
   create(@Body() dto: CreateBookingDto, @Req() req: { user: { id: number } }) {
-    return this.bookings.create(req.user.id, dto.showtimeId, dto.method);
+    return this.bookings.create(req.user.id, dto);
   }
 
   @Get()
