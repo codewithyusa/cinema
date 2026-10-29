@@ -5,7 +5,8 @@ import { loadUser, useAuth } from '../src/store/authStore';
 
 export default function RootLayout() {
   const router = useRouter();
-  const segments = useSegments();
+  // Typed as a plain list so the empty check at the splash screen is allowed.
+  const segments = useSegments() as string[];
   const navState = useRootNavigationState();
   const { user, ready } = useAuth();
 

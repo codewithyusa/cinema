@@ -2,8 +2,13 @@ import { Tabs } from 'expo-router';
 import { Ionicons } from '../../src/components/Icon';
 import { colors } from '../../src/theme/colors';
 
-const icon = (name: keyof typeof Ionicons.glyphMap) =>
-  ({ color, size }: { color: string; size: number }) => <Ionicons name={name} size={size} color={color} />;
+// The tab bar passes the color as a type that can be empty, so the function
+// accepts any value and falls back to the muted color.
+const icon =
+  (name: keyof typeof Ionicons.glyphMap) =>
+  ({ color, size }: { color: unknown; size: number }) => (
+    <Ionicons name={name} size={size} color={typeof color === 'string' ? color : colors.muted} />
+  );
 
 export default function TabsLayout() {
   return (
