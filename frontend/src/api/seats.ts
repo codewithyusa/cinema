@@ -120,3 +120,24 @@ export const cancelBooking = (code: string) =>
   });
 
 export const getBookings = () => request<ServerBooking[]>('/bookings');
+
+export type PaymentStart = {
+  tx_ref: string;
+  checkout_url: string;
+  total_etb: number;
+  hold_expires_at: string;
+};
+
+export type PaymentResult = { status: 'paid' | 'pending' | 'failed'; booking?: Booking };
+
+export const initializePayment = (showtimeId: string, snacks: Record<string, number>, promoCode?: string) =>
+  request<PaymentStart>('/payments/initialize', {
+    method: 'POST',
+    body: JSON.stringify({ showtimeId: Number(showtimeId), snacks, promoCode: promoCode || undefined }),
+  });
+
+export const verifyPayment = (txRef: string) =>
+  request<PaymentResult>(`/payments/verify/${encodeURIComponent(txRef)}`, {
+    method: 'POST',
+    body: '{}',
+  });
