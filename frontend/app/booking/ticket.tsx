@@ -16,6 +16,7 @@ const methodNames: Record<string, string> = {
   mpesa: 'M-Pesa',
   card: 'Card',
   cash: 'Pay at cinema',
+  chapa: 'Chapa (online)',
 };
 
 export default function Ticket() {

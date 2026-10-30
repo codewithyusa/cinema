@@ -1,31 +1,19 @@
-import { useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, AppState, Linking, Pressable, ScrollView, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../../src/theme/colors';
 import { getMovie } from '../../src/api/movies';
 import HoldTimer from '../../src/components/HoldTimer';
-import { ApiError, createBooking } from '../../src/api/seats';
+import { ApiError, Booking, createBooking, initializePayment, verifyPayment } from '../../src/api/seats';
 
-type Method = 'telebirr' | 'card' | 'cash';
+type Method = 'online' | 'cash';
 
 const methods: { id: Method; name: string; desc: string; icon: keyof typeof Ionicons.glyphMap }[] = [
-  { id: 'telebirr', name: 'Telebirr', desc: 'Pay with your phone number', icon: 'phone-portrait-outline' },
-  { id: 'card', name: 'Credit / Debit card', desc: 'Visa, Mastercard', icon: 'card-outline' },
+  { id: 'online', name: 'Pay online', desc: 'Telebirr, CBE Birr, M-Pesa or card', icon: 'card-outline' },
   { id: 'cash', name: 'Pay at cinema', desc: 'Pay at the counter before the show', icon: 'cash-outline' },
 ];
-
-const inputStyle = {
-  height: 50,
-  borderRadius: 12,
-  backgroundColor: colors.bg,
-  borderWidth: 1,
-  borderColor: colors.border,
-  paddingHorizontal: 14,
-  color: colors.text,
-  fontSize: 15,
-} as const;
 
 export default function Payment() {
   const { id, cinema, date, time, seats, total, showtimeId, expiresAt, snacks, promo } = useLocalSearchParams<{
@@ -43,16 +31,20 @@ export default function Payment() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const movie = getMovie(id);
+  const showtime = showtimeId ?? '1';
 
-  const [method, setMethod] = useState<Method>('telebirr');
-  const [phone, setPhone] = useState('');
-  const [cardNumber, setCardNumber] = useState('');
-  const [expiry, setExpiry] = useState('');
-  const [cvv, setCvv] = useState('');
+  const [method, setMethod] = useState<Method>('online');
   const [loading, setLoading] = useState(false);
+  const [checking, setChecking] = useState(false);
+  const [txRef, setTxRef] = useState('');
+  const [checkoutUrl, setCheckoutUrl] = useState('');
+  const [payTotal, setPayTotal] = useState<number | null>(null);
+  const [holdUntil, setHoldUntil] = useState<string | undefined>(expiresAt);
   const [error, setError] = useState('');
+  const [info, setInfo] = useState('');
 
-  const amount = Math.round(Number(total) || 0);
+  const waiting = !!txRef;
+  const amount = Math.round(payTotal ?? (Number(total) || 0));
 
   const snackMap = useMemo<Record<string, number>>(() => {
     try {
@@ -63,50 +55,46 @@ export default function Payment() {
   }, [snacks]);
 
   const onExpire = () => {
-    // Do not interrupt a payment that is already being processed.
-    if (loading) return;
+    // Never throw the customer out while a payment is being started or checked.
+    if (loading || checking || waiting) return;
     router.replace({
       pathname: '/booking/seats',
       params: { id, cinema, date, time, showtimeId },
     });
   };
 
-  const validate = () => {
-    if (method === 'telebirr' && !/^(\+251|0)?9\d{8}$/.test(phone.replace(/\s/g, ''))) {
-      return 'Enter a valid phone number, for example 0912345678';
-    }
-    if (method === 'card') {
-      if (cardNumber.replace(/\s/g, '').length < 16) return 'Enter a valid 16 digit card number';
-      if (!/^\d{2}\/\d{2}$/.test(expiry)) return 'Expiry must look like 08/28';
-      if (cvv.length < 3) return 'Enter the 3 digit CVV';
-    }
-    return '';
+  const goToTicket = (b: Booking, how: string) =>
+    router.replace({
+      pathname: '/booking/ticket',
+      params: {
+        id,
+        cinema,
+        date,
+        time,
+        seats: b.seats.join(','),
+        total: String(b.total_etb),
+        code: b.code,
+        method: how,
+        paid: b.paid ? '1' : '0',
+      },
+    });
+
+  const openCheckout = (url: string) => {
+    Linking.openURL(url).catch(() => setInfo('Could not open the payment page. Tap "Open payment page".'));
   };
 
-  const pay = async () => {
-    const problem = validate();
-    setError(problem);
-    if (problem) return;
-
+  // Online: the server prices the order and asks Chapa for a checkout link.
+  const payOnline = async () => {
     setLoading(true);
+    setError('');
+    setInfo('');
     try {
-      // Card details stay on the phone. The server gets the method, snacks and promo code,
-      // and it works out the price itself.
-      const booking = await createBooking(showtimeId ?? '1', method, snackMap, promo);
-      router.replace({
-        pathname: '/booking/ticket',
-        params: {
-          id,
-          cinema,
-          date,
-          time,
-          seats: booking.seats.join(','),
-          total: String(booking.total_etb),
-          code: booking.code,
-          method,
-          paid: booking.paid ? '1' : '0',
-        },
-      });
+      const res = await initializePayment(showtime, snackMap, promo);
+      setTxRef(res.tx_ref);
+      setCheckoutUrl(res.checkout_url);
+      setPayTotal(res.total_etb);
+      setHoldUntil(res.hold_expires_at);
+      openCheckout(res.checkout_url);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Cannot reach the server.');
     } finally {
@@ -114,12 +102,63 @@ export default function Payment() {
     }
   };
 
+  // Pay at the cinema: the seats are booked now and paid at the counter.
+  const reserve = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const booking = await createBooking(showtime, 'cash', snackMap, promo);
+      goToTicket(booking, 'cash');
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'Cannot reach the server.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Asks the server whether the payment went through. The server asks Chapa.
+  const check = async (auto: boolean) => {
+    if (!txRef || checking) return;
+    setChecking(true);
+    if (!auto) {
+      setError('');
+      setInfo('');
+    }
+    try {
+      const r = await verifyPayment(txRef);
+      if (r.status === 'paid' && r.booking) {
+        goToTicket(r.booking, 'chapa');
+        return;
+      }
+      if (r.status === 'failed') {
+        setError('The payment was not completed. Open the payment page to try again.');
+      } else if (!auto) {
+        setInfo('We have not received your payment yet. Finish paying, then tap again.');
+      }
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'Cannot reach the server.');
+    } finally {
+      setChecking(false);
+    }
+  };
+
+  // When the customer comes back to the app, check the payment on their behalf.
+  const checkRef = useRef(check);
+  checkRef.current = check;
+  useEffect(() => {
+    if (!waiting) return;
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') checkRef.current(true);
+    });
+    return () => sub.remove();
+  }, [waiting]);
+
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg, paddingTop: insets.top + 12 }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 20 }}>
         <Pressable
           onPress={() => router.back()}
-          disabled={loading}
+          disabled={loading || checking}
           style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' }}
         >
           <Ionicons name="chevron-back" size={22} color={colors.text} />
@@ -128,7 +167,7 @@ export default function Payment() {
       </View>
 
       <View style={{ paddingHorizontal: 20, paddingTop: 12 }}>
-        <HoldTimer expiresAt={expiresAt} onExpire={onExpire} />
+        <HoldTimer expiresAt={holdUntil} onExpire={onExpire} />
       </View>
 
       <ScrollView contentContainerStyle={{ padding: 20, gap: 16 }} keyboardShouldPersistTaps="handled">
@@ -141,109 +180,62 @@ export default function Payment() {
           <Text style={{ color: colors.redText, fontSize: 13, fontWeight: '700' }}>Seats {seats?.split(',').join(', ')}</Text>
         </View>
 
-        <Text style={{ color: colors.text, fontSize: 15, fontWeight: '800' }}>Payment method</Text>
-        <View style={{ gap: 10 }}>
-          {methods.map((m) => {
-            const active = method === m.id;
-            return (
-              <Pressable
-                key={m.id}
-                onPress={() => {
-                  setMethod(m.id);
-                  setError('');
-                }}
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: 14,
-                  backgroundColor: colors.surface,
-                  borderRadius: 16,
-                  padding: 14,
-                  borderWidth: 1.5,
-                  borderColor: active ? colors.red : colors.border,
-                }}
-              >
-                <Ionicons name={m.icon} size={24} color={active ? colors.red : colors.muted} />
-                <View style={{ flex: 1 }}>
-                  <Text style={{ color: colors.text, fontSize: 14, fontWeight: '700' }}>{m.name}</Text>
-                  <Text style={{ color: colors.muted, fontSize: 12 }}>{m.desc}</Text>
-                </View>
-                <Ionicons name={active ? 'radio-button-on' : 'radio-button-off'} size={22} color={active ? colors.red : colors.muted} />
-              </Pressable>
-            );
-          })}
-        </View>
-
-        {method === 'telebirr' && (
-          <View style={{ backgroundColor: colors.surface, borderRadius: 16, padding: 14, gap: 10 }}>
-            <Text style={{ color: colors.muted, fontSize: 13 }}>Telebirr phone number</Text>
-            <TextInput
-              value={phone}
-              onChangeText={setPhone}
-              placeholder="09 1234 5678"
-              placeholderTextColor={colors.muted}
-              keyboardType="phone-pad"
-              style={inputStyle}
-            />
-          </View>
-        )}
-
-        {method === 'card' && (
-          <View style={{ backgroundColor: colors.surface, borderRadius: 16, padding: 14, gap: 10 }}>
-            <Text style={{ color: colors.muted, fontSize: 13 }}>Card number</Text>
-            <TextInput
-              value={cardNumber}
-              onChangeText={(t) =>
-                setCardNumber(
-                  t
-                    .replace(/\D/g, '')
-                    .slice(0, 16)
-                    .replace(/(.{4})/g, '$1 ')
-                    .trim()
-                )
-              }
-              placeholder="1234 5678 9012 3456"
-              placeholderTextColor={colors.muted}
-              keyboardType="number-pad"
-              style={inputStyle}
-            />
-            <View style={{ flexDirection: 'row', gap: 10 }}>
-              <View style={{ flex: 1, gap: 6 }}>
-                <Text style={{ color: colors.muted, fontSize: 13 }}>Expiry</Text>
-                <TextInput
-                  value={expiry}
-                  onChangeText={(t) => {
-                    const d = t.replace(/\D/g, '').slice(0, 4);
-                    setExpiry(d.length > 2 ? d.slice(0, 2) + '/' + d.slice(2) : d);
-                  }}
-                  placeholder="MM/YY"
-                  placeholderTextColor={colors.muted}
-                  keyboardType="number-pad"
-                  style={inputStyle}
-                />
-              </View>
-              <View style={{ flex: 1, gap: 6 }}>
-                <Text style={{ color: colors.muted, fontSize: 13 }}>CVV</Text>
-                <TextInput
-                  value={cvv}
-                  onChangeText={(t) => setCvv(t.replace(/\D/g, '').slice(0, 3))}
-                  placeholder="123"
-                  placeholderTextColor={colors.muted}
-                  keyboardType="number-pad"
-                  secureTextEntry
-                  style={inputStyle}
-                />
-              </View>
-            </View>
-          </View>
-        )}
-
-        {method === 'cash' && (
-          <View style={{ backgroundColor: colors.surface, borderRadius: 16, padding: 14 }}>
+        {waiting ? (
+          <View style={{ backgroundColor: colors.surface, borderRadius: 18, padding: 16, gap: 12 }}>
+            <Text style={{ color: colors.text, fontSize: 16, fontWeight: '800' }}>Finish your payment</Text>
             <Text style={{ color: colors.muted, fontSize: 13, lineHeight: 19 }}>
-              Your seats are reserved. Show your booking code at the counter and pay before the show starts.
+              Complete the payment on the payment page, then come back here. Your seats are held while you pay.
             </Text>
+            <Pressable
+              onPress={() => openCheckout(checkoutUrl)}
+              style={{ height: 46, borderRadius: 12, borderWidth: 1, borderColor: colors.red, alignItems: 'center', justifyContent: 'center' }}
+            >
+              <Text style={{ color: colors.redText, fontWeight: '800' }}>Open payment page</Text>
+            </Pressable>
           </View>
+        ) : (
+          <>
+            <Text style={{ color: colors.text, fontSize: 15, fontWeight: '800' }}>Payment method</Text>
+            <View style={{ gap: 10 }}>
+              {methods.map((m) => {
+                const active = method === m.id;
+                return (
+                  <Pressable
+                    key={m.id}
+                    onPress={() => {
+                      setMethod(m.id);
+                      setError('');
+                    }}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 14,
+                      backgroundColor: colors.surface,
+                      borderRadius: 16,
+                      padding: 14,
+                      borderWidth: 1.5,
+                      borderColor: active ? colors.red : colors.border,
+                    }}
+                  >
+                    <Ionicons name={m.icon} size={24} color={active ? colors.red : colors.muted} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ color: colors.text, fontSize: 14, fontWeight: '700' }}>{m.name}</Text>
+                      <Text style={{ color: colors.muted, fontSize: 12 }}>{m.desc}</Text>
+                    </View>
+                    <Ionicons name={active ? 'radio-button-on' : 'radio-button-off'} size={22} color={active ? colors.red : colors.muted} />
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            <View style={{ backgroundColor: colors.surface, borderRadius: 16, padding: 14 }}>
+              <Text style={{ color: colors.muted, fontSize: 13, lineHeight: 19 }}>
+                {method === 'online'
+                  ? 'You will pay on a secure payment page. Your card or wallet details never go through this app.'
+                  : 'Your seats are reserved. Show your booking code at the counter and pay before the show starts.'}
+              </Text>
+            </View>
+          </>
         )}
       </ScrollView>
 
@@ -255,10 +247,25 @@ export default function Payment() {
             fontWeight: '700',
             textAlign: 'center',
             paddingVertical: 10,
+            paddingHorizontal: 20,
             backgroundColor: colors.surface,
           }}
         >
           {error}
+        </Text>
+      ) : null}
+      {info ? (
+        <Text
+          style={{
+            color: colors.muted,
+            fontSize: 13,
+            textAlign: 'center',
+            paddingVertical: 10,
+            paddingHorizontal: 20,
+            backgroundColor: colors.surface,
+          }}
+        >
+          {info}
         </Text>
       ) : null}
 
@@ -279,8 +286,8 @@ export default function Payment() {
           <Text style={{ color: colors.text, fontSize: 22, fontWeight: '800' }}>{amount} ETB</Text>
         </View>
         <Pressable
-          onPress={pay}
-          disabled={loading}
+          onPress={waiting ? () => check(false) : method === 'online' ? payOnline : reserve}
+          disabled={loading || checking}
           style={{
             height: 52,
             minWidth: 150,
@@ -289,14 +296,14 @@ export default function Payment() {
             backgroundColor: colors.red,
             alignItems: 'center',
             justifyContent: 'center',
-            opacity: loading ? 0.7 : 1,
+            opacity: loading || checking ? 0.7 : 1,
           }}
         >
-          {loading ? (
+          {loading || checking ? (
             <ActivityIndicator color="#fff" />
           ) : (
             <Text style={{ color: '#fff', fontSize: 16, fontWeight: '800' }}>
-              {method === 'cash' ? 'Reserve' : `Pay ${amount} ETB`}
+              {waiting ? 'I have paid' : method === 'online' ? `Pay ${amount} ETB` : 'Reserve'}
             </Text>
           )}
         </Pressable>
