@@ -2,6 +2,9 @@ import http from 'node:http';
 
 // A stand-in for Chapa, only for testing our own payment code on this PC.
 const PORT = Number(process.env.FAKE_CHAPA_PORT ?? 4010);
+// The address the customer's browser or phone uses to open the checkout page.
+// On a phone, set FAKE_CHAPA_PUBLIC_URL to http://<your PC's IP>:4010
+const PUBLIC_URL = (process.env.FAKE_CHAPA_PUBLIC_URL ?? `http://localhost:${PORT}`).replace(/\/+$/, '');
 const payments = new Map();
 
 function send(res, status, body) {
@@ -23,6 +26,34 @@ function readJson(req) {
   });
 }
 
+const esc = (s) =>
+  String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+
+function checkoutPage(ref, p) {
+  if (!p) {
+    return '<!doctype html><meta charset="utf-8"><body style="font-family:sans-serif;padding:24px">Unknown payment.</body>';
+  }
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Fake Chapa</title></head>
+<body style="font-family:sans-serif;background:#0b0809;color:#fff;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;text-align:center">
+<div style="max-width:320px;padding:24px">
+<p style="color:#f5c518;font-size:12px;letter-spacing:2px">FAKE CHAPA - TESTING ONLY</p>
+<h2>${esc(p.request.amount)} ${esc(p.request.currency)}</h2>
+<p style="color:#aaa;font-size:14px">${esc(ref)}</p>
+<button id="pay" style="height:48px;padding:0 32px;border:0;border-radius:12px;background:#e11d48;color:#fff;font-size:16px;font-weight:700">Pay now (test)</button>
+<p id="msg" style="margin-top:16px"></p>
+</div>
+<script>
+document.getElementById('pay').onclick = async function () {
+  var r = await fetch('/test/pay/${encodeURIComponent(ref)}', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: '{}'
+  });
+  document.getElementById('msg').textContent = r.ok ? 'Payment done. Go back to the app.' : 'Something went wrong.';
+};
+</script></body></html>`;
+}
+
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://localhost:${PORT}`);
   const parts = url.pathname.split('/').filter(Boolean);
@@ -41,7 +72,7 @@ const server = http.createServer(async (req, res) => {
     return send(res, 200, {
       message: 'Hosted Link',
       status: 'success',
-      data: { checkout_url: `http://localhost:${PORT}/checkout/${body.tx_ref}` },
+      data: { checkout_url: `${PUBLIC_URL}/checkout/${body.tx_ref}` },
     });
   }
 
@@ -82,8 +113,9 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (req.method === 'GET' && parts[0] === 'checkout') {
-    res.writeHead(200, { 'Content-Type': 'text/plain' });
-    return res.end('This is the fake Chapa checkout page used for testing.');
+    const ref = decodeURIComponent(parts[1] ?? '');
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+    return res.end(checkoutPage(ref, payments.get(ref)));
   }
 
   send(res, 404, { message: 'Not found' });
