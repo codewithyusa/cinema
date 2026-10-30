@@ -1,5 +1,6 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { randomBytes } from 'node:crypto';
+import '../common/env';
 import { CinemasService } from '../cinemas/cinemas.service';
 import { DatabaseService } from '../db/database.service';
 import { CreateBookingDto, QuoteDto } from './bookings.dto';
@@ -93,13 +94,8 @@ export class BookingsService {
     return { showtime_id: dto.showtimeId, seats, ...order };
   }
 
-  create(userId: number, dto: CreateBookingDto) {
-    const showtime = this.cinemas.getShowtime(dto.showtimeId);
-    const seats = this.liveHold(userId, dto.showtimeId);
-    const order = priceOrder(seats, showtime.row_count, showtime.price_etb, dto.snacks, dto.promoCode);
-    // Demo payment: Telebirr and card count as paid. Real payment confirmation comes later.
-    const paid = dto.method === 'cash' ? 0 : 1;
-
+  // Saves a booking and its seats in one step. Used by direct booking and by confirmed payments.
+  book(userId: number, showtimeId: number, seats: string[], totalEtb: number, method: string, paid: number) {
     this.db.run('BEGIN IMMEDIATE');
     try {
       let code = this.makeCode();
@@ -107,7 +103,7 @@ export class BookingsService {
 
       const result = this.db.run(
         'INSERT INTO bookings (code, user_id, showtime_id, seats, total_etb, method, paid) VALUES (?, ?, ?, ?, ?, ?, ?)',
-        code, userId, dto.showtimeId, seats.join(','), order.total_etb, dto.method, paid,
+        code, userId, showtimeId, seats.join(','), totalEtb, method, paid,
       );
       const bookingId = Number(result.lastInsertRowid);
 
@@ -115,22 +111,44 @@ export class BookingsService {
         try {
           this.db.run(
             'INSERT INTO booked_seats (showtime_id, seat, booking_id) VALUES (?, ?, ?)',
-            dto.showtimeId, seat, bookingId,
+            showtimeId, seat, bookingId,
           );
         } catch {
           throw new ConflictException(`Seat ${seat} was just booked by someone else.`);
         }
       }
 
-      this.db.run('DELETE FROM seat_holds WHERE showtime_id = ? AND user_id = ?', dto.showtimeId, userId);
+      this.db.run('DELETE FROM seat_holds WHERE showtime_id = ? AND user_id = ?', showtimeId, userId);
       this.db.run('COMMIT');
 
       const row = this.db.get<BookingRow>('SELECT * FROM bookings WHERE id = ?', bookingId)!;
-      return { ...this.present(row), breakdown: order };
+      return this.present(row);
     } catch (e) {
       this.db.run('ROLLBACK');
       throw e;
     }
+  }
+
+  create(userId: number, dto: CreateBookingDto) {
+    // Once online payments are live, set ALLOW_DEMO_PAYMENTS=false so that only
+    // "Pay at cinema" can be booked without paying online.
+    if (dto.method !== 'cash' && process.env.ALLOW_DEMO_PAYMENTS === 'false') {
+      throw new BadRequestException('Pay online to book. Only "Pay at cinema" can be booked directly.');
+    }
+
+    const showtime = this.cinemas.getShowtime(dto.showtimeId);
+    const seats = this.liveHold(userId, dto.showtimeId);
+    const order = priceOrder(seats, showtime.row_count, showtime.price_etb, dto.snacks, dto.promoCode);
+    // Demo payment: Telebirr and card count as paid. Real payments go through /payments.
+    const paid = dto.method === 'cash' ? 0 : 1;
+
+    const booking = this.book(userId, dto.showtimeId, seats, order.total_etb, dto.method, paid);
+    return { ...booking, breakdown: order };
+  }
+
+  find(userId: number, code: string) {
+    const row = this.db.get<BookingRow>('SELECT * FROM bookings WHERE code = ? AND user_id = ?', code, userId);
+    return row ? this.present(row) : undefined;
   }
 
   list(userId: number) {
