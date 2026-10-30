@@ -5,10 +5,19 @@ import { MoviesModule } from './movies/movies.module';
 import { CinemasModule } from './cinemas/cinemas.module';
 import { SeatsModule } from './seats/seats.module';
 import { BookingsModule } from './bookings/bookings.module';
+import { PaymentsModule } from './payments/payments.module';
 
 // Each feature module (movies, bookings...) is added to this list
 // as we build it.
 @Module({
-  imports: [DatabaseModule, AuthModule, MoviesModule, CinemasModule, SeatsModule, BookingsModule],
+  imports: [
+    DatabaseModule,
+    AuthModule,
+    MoviesModule,
+    CinemasModule,
+    SeatsModule,
+    BookingsModule,
+    PaymentsModule,
+  ],
 })
 export class AppModule {}
