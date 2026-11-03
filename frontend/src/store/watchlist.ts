@@ -11,11 +11,15 @@ export async function getWatchlist(email: string): Promise<string[]> {
   }
 }
 
+export async function setWatchlist(email: string, ids: string[]): Promise<void> {
+  try {
+    await AsyncStorage.setItem(keyFor(email), JSON.stringify(ids));
+  } catch {}
+}
+
 export async function toggleWatchlist(email: string, movieId: string): Promise<string[]> {
   const list = await getWatchlist(email);
   const next = list.includes(movieId) ? list.filter((x) => x !== movieId) : [movieId, ...list];
-  try {
-    await AsyncStorage.setItem(keyFor(email), JSON.stringify(next));
-  } catch {}
+  await setWatchlist(email, next);
   return next;
 }
