@@ -4,8 +4,8 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { Ionicons } from '../../src/components/Icon';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../../src/theme/colors';
-import { getComingSoon } from '../../src/api/movies';
 import { useMovies } from '../../src/hooks/useMovies';
+import { useComingSoon } from '../../src/hooks/useComingSoon';
 import { useAuth } from '../../src/store/authStore';
 import { getProfile } from '../../src/store/profile';
 import MovieCard from '../../src/components/MovieCard';
@@ -45,7 +45,7 @@ export default function Home() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const { movies } = useMovies();
-  const upcoming = getComingSoon();
+  const { upcoming } = useComingSoon();
   const hero = movies[0];
 
   const [query, setQuery] = useState('');
@@ -263,22 +263,24 @@ export default function Home() {
             ))}
           </Section>
 
-          <Section title="Coming soon">
-            {upcoming.map((m) => (
-              <View key={m.id} style={{ width: 140, gap: 8 }}>
-                <Poster movie={m} style={{ width: 140, height: 200, borderRadius: 16 }} />
-                <View style={{ gap: 2 }}>
-                  <Text numberOfLines={1} style={{ color: colors.text, fontSize: 14, fontWeight: '800' }}>
-                    {m.title}
-                  </Text>
-                  <Text style={{ color: colors.muted, fontSize: 12 }}>{m.genre}</Text>
-                  <Text style={{ color: colors.redText, fontSize: 12, fontWeight: '700' }}>
-                    Opens {releaseLabel(m.releaseInDays)}
-                  </Text>
+          {upcoming.length > 0 ? (
+            <Section title="Coming soon">
+              {upcoming.map((m) => (
+                <View key={m.id} style={{ width: 140, gap: 8 }}>
+                  <Poster movie={m} style={{ width: 140, height: 200, borderRadius: 16 }} />
+                  <View style={{ gap: 2 }}>
+                    <Text numberOfLines={1} style={{ color: colors.text, fontSize: 14, fontWeight: '800' }}>
+                      {m.title}
+                    </Text>
+                    <Text style={{ color: colors.muted, fontSize: 12 }}>{m.genre}</Text>
+                    <Text style={{ color: colors.redText, fontSize: 12, fontWeight: '700' }}>
+                      Opens {releaseLabel(m.releaseInDays)}
+                    </Text>
+                  </View>
                 </View>
-              </View>
-            ))}
-          </Section>
+              ))}
+            </Section>
+          ) : null}
         </>
       )}
     </ScrollView>
