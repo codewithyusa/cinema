@@ -4,8 +4,8 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '../../src/components/Icon';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../../src/theme/colors';
-import { getMovie } from '../../src/api/movies';
-import { getReviews, saveReview, Review } from '../../src/store/reviews';
+import { useMovie } from '../../src/hooks/useMovies';
+import { ReviewItem, getReviews, saveReview } from '../../src/api/reviews';
 import { useAuth } from '../../src/store/authStore';
 
 export default function ReviewScreen() {
@@ -13,18 +13,20 @@ export default function ReviewScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
-  const movie = getMovie(movieId);
+  const movie = useMovie(movieId);
 
-  const [reviews, setReviews] = useState<Review[]>([]);
+  const [reviews, setReviews] = useState<ReviewItem[]>([]);
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState('');
   const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     if (!movieId) return;
-    getReviews(movieId).then((list) => {
+    getReviews(movieId, user?.email).then((list) => {
       setReviews(list);
-      const mine = list.find((r) => r.email === user?.email);
+      const mine = list.find((r) => r.mine);
       if (mine) {
         setRating(mine.rating);
         setComment(mine.comment);
@@ -33,9 +35,17 @@ export default function ReviewScreen() {
   }, [movieId, user?.email]);
 
   const submit = async () => {
-    if (!user || !movieId || rating === 0) return;
-    setReviews(await saveReview(movieId, user.email, rating, comment));
-    setSaved(true);
+    if (!user || !movieId || rating === 0 || saving) return;
+    setSaving(true);
+    setError('');
+    try {
+      setReviews(await saveReview(movieId, user.email, rating, comment));
+      setSaved(true);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not save your review. Try again.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const average = reviews.length
@@ -108,20 +118,22 @@ export default function ReviewScreen() {
             }}
           />
 
+          {error ? <Text style={{ color: colors.redText, fontSize: 13 }}>{error}</Text> : null}
+
           <Pressable
             onPress={submit}
-            disabled={rating === 0}
+            disabled={rating === 0 || saving}
             style={{
               height: 52,
               borderRadius: 14,
               backgroundColor: colors.red,
-              opacity: rating === 0 ? 0.45 : 1,
+              opacity: rating === 0 || saving ? 0.45 : 1,
               alignItems: 'center',
               justifyContent: 'center',
             }}
           >
             <Text style={{ color: '#fff', fontSize: 16, fontWeight: '800' }}>
-              {saved ? 'Saved' : 'Submit review'}
+              {saving ? 'Saving...' : saved ? 'Saved' : 'Submit review'}
             </Text>
           </Pressable>
         </View>
@@ -144,9 +156,7 @@ export default function ReviewScreen() {
           reviews.map((r) => (
             <View key={r.id} style={{ backgroundColor: colors.surface, borderRadius: 18, padding: 14, gap: 6 }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Text style={{ color: colors.text, fontSize: 14, fontWeight: '800' }}>
-                  {r.email.split('@')[0]}
-                </Text>
+                <Text style={{ color: colors.text, fontSize: 14, fontWeight: '800' }}>{r.author}</Text>
                 <View style={{ flexDirection: 'row', gap: 2 }}>
                   {[1, 2, 3, 4, 5].map((n) => (
                     <Ionicons
