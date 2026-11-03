@@ -138,6 +138,53 @@ async function main() {
   // 9. Security
   const noToken = await call('POST', '/bookings', null, { showtimeId: id, method: 'cash' });
   check('booking without a token rejected (401)', noToken.status === 401, `status ${noToken.status}`);
+
+  // 10. Reviews (movie 2). Old reviews from earlier runs may exist, so we compare counts.
+  console.log('');
+  const noTokenReviews = await call('GET', '/movies/2/reviews', null);
+  check('reviews without a token rejected (401)', noTokenReviews.status === 401, `status ${noTokenReviews.status}`);
+
+  const base = (await call('GET', '/movies/2/reviews', tokenA)).data?.length ?? 0;
+
+  const reviewA = await call('POST', '/movies/2/reviews', tokenA, { rating: 5, comment: 'Great movie' });
+  check(
+    'first review saved and marked as mine',
+    reviewA.status < 300 && reviewA.data?.length === base + 1 && reviewA.data?.filter((r) => r.mine).length === 1,
+    JSON.stringify(reviewA.data),
+  );
+
+  const myReviewA = reviewA.data?.find((r) => r.mine);
+  check('review author is a name, not an email', !!myReviewA?.author && !myReviewA.author.includes('@'), myReviewA?.author);
+
+  const reviewB = await call('POST', '/movies/2/reviews', tokenB, { rating: 3, comment: 'It was okay' });
+  check('second user review is added', reviewB.status < 300 && reviewB.data?.length === base + 2, `got ${reviewB.data?.length}`);
+
+  const listA = await call('GET', '/movies/2/reviews', tokenA);
+  const listB = await call('GET', '/movies/2/reviews', tokenB);
+  check(
+    'each user sees only their own review as mine',
+    listA.data?.filter((r) => r.mine).length === 1 &&
+      listB.data?.filter((r) => r.mine).length === 1 &&
+      listA.data?.find((r) => r.mine)?.rating === 5 &&
+      listB.data?.find((r) => r.mine)?.rating === 3,
+    `A mine: ${listA.data?.filter((r) => r.mine).length}, B mine: ${listB.data?.filter((r) => r.mine).length}`,
+  );
+
+  const replace = await call('POST', '/movies/2/reviews', tokenA, { rating: 4, comment: 'Better on second watch' });
+  check(
+    'second review from the same user replaces the first',
+    replace.data?.length === base + 2 && replace.data?.find((r) => r.mine)?.rating === 4,
+    `length ${replace.data?.length}, rating ${replace.data?.find((r) => r.mine)?.rating}`,
+  );
+
+  const zero = await call('POST', '/movies/2/reviews', tokenA, { rating: 0 });
+  check('rating 0 rejected (400)', zero.status === 400, `status ${zero.status}`);
+
+  const six = await call('POST', '/movies/2/reviews', tokenA, { rating: 6 });
+  check('rating 6 rejected (400)', six.status === 400, `status ${six.status}`);
+
+  const noMovie = await call('POST', '/movies/999/reviews', tokenA, { rating: 5 });
+  check('review for an unknown movie rejected (404)', noMovie.status === 404, `status ${noMovie.status}`);
 }
 
 main()
