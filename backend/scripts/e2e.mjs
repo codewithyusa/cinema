@@ -185,6 +185,32 @@ async function main() {
 
   const noMovie = await call('POST', '/movies/999/reviews', tokenA, { rating: 5 });
   check('review for an unknown movie rejected (404)', noMovie.status === 404, `status ${noMovie.status}`);
+
+  // 11. Watchlist. Both test users are new, so their lists start empty.
+  console.log('');
+  const wlNoToken = await call('GET', '/watchlist', null);
+  check('watchlist without a token rejected (401)', wlNoToken.status === 401, `status ${wlNoToken.status}`);
+
+  const wlStart = await call('GET', '/watchlist', tokenA);
+  check('new user has an empty watchlist', Array.isArray(wlStart.data) && wlStart.data.length === 0, JSON.stringify(wlStart.data));
+
+  const wlAdd = await call('POST', '/watchlist/2', tokenA);
+  check('movie 2 added to watchlist', wlAdd.status < 300 && wlAdd.data?.[0] === 2, JSON.stringify(wlAdd.data));
+
+  const wlAgain = await call('POST', '/watchlist/2', tokenA);
+  check('adding the same movie twice changes nothing', wlAgain.data?.length === 1, JSON.stringify(wlAgain.data));
+
+  const wlSecond = await call('POST', '/watchlist/3', tokenA);
+  check('newest movie comes first', wlSecond.data?.[0] === 3 && wlSecond.data?.[1] === 2, JSON.stringify(wlSecond.data));
+
+  const wlOther = await call('GET', '/watchlist', tokenB);
+  check('other user does not see my watchlist', Array.isArray(wlOther.data) && wlOther.data.length === 0, JSON.stringify(wlOther.data));
+
+  const wlRemove = await call('DELETE', '/watchlist/2', tokenA);
+  check('movie 2 removed from watchlist', wlRemove.status < 300 && wlRemove.data?.length === 1 && wlRemove.data?.[0] === 3, JSON.stringify(wlRemove.data));
+
+  const wlUnknown = await call('POST', '/watchlist/999', tokenA);
+  check('unknown movie rejected (404)', wlUnknown.status === 404, `status ${wlUnknown.status}`);
 }
 
 main()
