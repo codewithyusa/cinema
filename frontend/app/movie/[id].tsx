@@ -4,7 +4,7 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '../../src/components/Icon';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../../src/theme/colors';
-import { getMovie } from '../../src/api/movies';
+import { useMovie } from '../../src/hooks/useMovies';
 import { getWatchlist, toggleWatchlist } from '../../src/store/watchlist';
 import { getReviews } from '../../src/store/reviews';
 import { useAuth } from '../../src/store/authStore';
@@ -15,7 +15,7 @@ export default function MovieDetails() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
-  const movie = getMovie(id);
+  const movie = useMovie(id);
   const [saved, setSaved] = useState(false);
   const [reviewCount, setReviewCount] = useState(0);
   const [average, setAverage] = useState<string | null>(null);
