@@ -4,7 +4,8 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { Ionicons } from '../../src/components/Icon';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../../src/theme/colors';
-import { getComingSoon, getMovies } from '../../src/api/movies';
+import { getComingSoon } from '../../src/api/movies';
+import { useMovies } from '../../src/hooks/useMovies';
 import { useAuth } from '../../src/store/authStore';
 import { getProfile } from '../../src/store/profile';
 import MovieCard from '../../src/components/MovieCard';
@@ -43,7 +44,7 @@ export default function Home() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
-  const movies = getMovies();
+  const { movies } = useMovies();
   const upcoming = getComingSoon();
   const hero = movies[0];
 
