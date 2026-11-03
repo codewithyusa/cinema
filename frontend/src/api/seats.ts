@@ -1,8 +1,8 @@
-import { Platform } from 'react-native';
 import { getToken } from '../store/authStore';
+import { API_URL } from '../config';
 
-// Phone uses your PC's IP. The browser uses localhost.
-export const API_URL = Platform.OS === 'web' ? 'http://localhost:8080' : 'http://192.168.100.24:8080';
+// Kept so any file that imports API_URL from here still works.
+export { API_URL };
 
 export type SeatStatus = 'free' | 'taken' | 'held' | 'mine' | string;
 export type SeatGrid = {
