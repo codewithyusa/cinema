@@ -4,8 +4,8 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { Ionicons } from '../../src/components/Icon';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../../src/theme/colors';
-import { getMovie } from '../../src/api/movies';
-import { getWatchlist, toggleWatchlist } from '../../src/store/watchlist';
+import { useMovies } from '../../src/hooks/useMovies';
+import { getWatchlist, toggleWatchlist } from '../../src/api/watchlist';
 import { useAuth } from '../../src/store/authStore';
 import Poster from '../../src/components/Poster';
 
@@ -13,6 +13,7 @@ export default function Watchlist() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
+  const { movies: allMovies } = useMovies();
   const [ids, setIds] = useState<string[]>([]);
 
   useFocusEffect(
@@ -27,7 +28,7 @@ export default function Watchlist() {
     setIds(await toggleWatchlist(user.email, id));
   };
 
-  const movies = ids.map((id) => getMovie(id)).filter((m) => m !== undefined);
+  const movies = ids.map((id) => allMovies.find((m) => m.id === id)).filter((m) => m !== undefined);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg, paddingTop: insets.top + 16 }}>

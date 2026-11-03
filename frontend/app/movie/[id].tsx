@@ -5,8 +5,8 @@ import { Ionicons } from '../../src/components/Icon';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../../src/theme/colors';
 import { useMovie } from '../../src/hooks/useMovies';
-import { getWatchlist, toggleWatchlist } from '../../src/store/watchlist';
-import { getReviews } from '../../src/store/reviews';
+import { getWatchlist, toggleWatchlist } from '../../src/api/watchlist';
+import { getReviews } from '../../src/api/reviews';
 import { useAuth } from '../../src/store/authStore';
 import Poster from '../../src/components/Poster';
 
@@ -27,13 +27,13 @@ export default function MovieDetails() {
   useFocusEffect(
     useCallback(() => {
       if (!id) return;
-      getReviews(id).then((list) => {
+      getReviews(id, user?.email).then((list) => {
         setReviewCount(list.length);
         setAverage(
           list.length ? (list.reduce((sum, r) => sum + r.rating, 0) / list.length).toFixed(1) : null
         );
       });
-    }, [id])
+    }, [id, user?.email])
   );
 
   const toggleSaved = async () => {
