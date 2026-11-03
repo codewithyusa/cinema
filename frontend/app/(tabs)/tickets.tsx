@@ -4,7 +4,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { Ionicons } from '../../src/components/Icon';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../../src/theme/colors';
-import { getMovie } from '../../src/api/movies';
+import { useMovies } from '../../src/hooks/useMovies';
 import { ServerBooking, getBookings } from '../../src/api/seats';
 import { getTickets, setTickets as replaceTickets, SavedTicket } from '../../src/store/tickets';
 import { useAuth } from '../../src/store/authStore';
@@ -57,6 +57,7 @@ export default function Tickets() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
+  const { movies } = useMovies();
   const [tickets, setTickets] = useState<SavedTicket[]>([]);
   const [offline, setOffline] = useState(false);
 
@@ -106,7 +107,7 @@ export default function Tickets() {
       ) : (
         <ScrollView contentContainerStyle={{ padding: 20, gap: 14 }}>
           {tickets.map((t) => {
-            const movie = getMovie(t.id);
+            const movie = movies.find((m) => m.id === t.id);
             return (
               <Pressable
                 key={t.code}
