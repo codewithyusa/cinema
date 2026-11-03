@@ -211,6 +211,23 @@ async function main() {
 
   const wlUnknown = await call('POST', '/watchlist/999', tokenA);
   check('unknown movie rejected (404)', wlUnknown.status === 404, `status ${wlUnknown.status}`);
+
+  // 12. Coming soon (public, no login needed)
+  console.log('');
+  const soon = await call('GET', '/coming-soon');
+  check('coming soon list is public and returns an array', soon.status === 200 && Array.isArray(soon.data), `status ${soon.status}`);
+
+  check(
+    'coming soon items have title, genre and release date',
+    soon.data?.every((m) => m.title && m.genre && /^\d{4}-\d{2}-\d{2}$/.test(m.release_date)),
+    JSON.stringify(soon.data?.[0]),
+  );
+
+  const dates = soon.data?.map((m) => m.release_date) ?? [];
+  check('coming soon is sorted by release date', dates.every((d, i) => i === 0 || dates[i - 1] <= d), dates.join(','));
+
+  const todayStr = new Date().toISOString().slice(0, 10);
+  check('coming soon has no past releases', dates.every((d) => d >= todayStr), dates.join(','));
 }
 
 main()
