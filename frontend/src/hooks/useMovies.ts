@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { request } from '../api/http';
 import { MovieItem, movies as localMovies } from '../api/movies';
 
+export type MovieWithTrailer = MovieItem & { trailer_url?: string | null };
+
 type ServerMovie = {
   id: number;
   title: string;
@@ -9,18 +11,19 @@ type ServerMovie = {
   duration_min: number;
   rating: number;
   synopsis: string;
+  trailer_url: string | null;
 };
 
 const formatDuration = (min: number) => `${Math.floor(min / 60)}h ${String(min % 60).padStart(2, '0')}m`;
 
 // Shared by all screens. Starts empty, fills after the first server answer.
-let cache: MovieItem[] | null = null;
-let inflight: Promise<MovieItem[]> | null = null;
+let cache: MovieWithTrailer[] | null = null;
+let inflight: Promise<MovieWithTrailer[]> | null = null;
 
-async function loadMovies(): Promise<MovieItem[]> {
+async function loadMovies(): Promise<MovieWithTrailer[]> {
   const list = await request<ServerMovie[]>('/movies');
   if (!Array.isArray(list)) return localMovies;
-  return localMovies.map((local) => {
+  return localMovies.map((local): MovieWithTrailer => {
     const s = list.find((m) => String(m.id) === local.id);
     if (!s) return local;
     return {
@@ -30,13 +33,14 @@ async function loadMovies(): Promise<MovieItem[]> {
       duration: formatDuration(s.duration_min),
       rating: s.rating,
       synopsis: s.synopsis,
+      trailer_url: s.trailer_url,
     };
   });
 }
 
 // Local movies first, then server data. If the server is off, local movies stay.
 export function useMovies() {
-  const [movies, setMovies] = useState<MovieItem[]>(cache ?? localMovies);
+  const [movies, setMovies] = useState<MovieWithTrailer[]>(cache ?? localMovies);
 
   useEffect(() => {
     let active = true;

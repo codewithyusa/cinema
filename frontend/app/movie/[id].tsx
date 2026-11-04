@@ -44,8 +44,10 @@ export default function MovieDetails() {
 
   const openTrailer = () => {
     if (!movie) return;
+    // The real trailer if the server has one, otherwise a YouTube search.
     const search = encodeURIComponent(`${movie.title} official trailer`);
-    Linking.openURL(`https://www.youtube.com/results?search_query=${search}`).catch(() => {});
+    const url = movie.trailer_url || `https://www.youtube.com/results?search_query=${search}`;
+    Linking.openURL(url).catch(() => {});
   };
 
   if (!movie) {
