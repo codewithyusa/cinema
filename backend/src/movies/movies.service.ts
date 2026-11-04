@@ -26,6 +26,18 @@ const SEED: Omit<Movie, 'id'>[] = [
   { title: 'Furious 7', genre: 'Action', duration_min: 137, rating: 7.1, synopsis: 'Dom and his crew face a deadly enemy who is hunting each of them down.', poster_url: null, trailer_url: null },
 ];
 
+// YouTube video ids by movie title. A movie that is not listed here keeps
+// trailer_url empty, and the app opens a YouTube search for it instead.
+// To add one: put the id here, then restart the backend.
+const TRAILER_IDS: Record<string, string> = {
+  'Dune: Part Two': 'Mm456_D4ZvE',
+  'Oppenheimer': 'GrT5lpK6L1E',
+  'Inception': '7DwuVKfjctk',
+  'Interstellar': '-gieJQejbHQ',
+  'Top Gun: Maverick': 'qSqVVswa420',
+  'Furious 7': 'yISKeT6sDOg',
+};
+
 @Injectable()
 export class MoviesService {
   constructor(private readonly db: DatabaseService) {
@@ -50,6 +62,18 @@ export class MoviesService {
           m.title, m.genre, m.duration_min, m.rating, m.synopsis, m.poster_url, m.trailer_url,
         );
       }
+    }
+    this.fillTrailers();
+  }
+
+  // Runs on every start. Only fills empty trailer links, so a link that is
+  // already set (for example edited by hand) is never overwritten.
+  private fillTrailers() {
+    for (const [title, videoId] of Object.entries(TRAILER_IDS)) {
+      this.db.run(
+        'UPDATE movies SET trailer_url = ? WHERE title = ? AND trailer_url IS NULL',
+        `https://www.youtube.com/watch?v=${videoId}`, title,
+      );
     }
   }
 

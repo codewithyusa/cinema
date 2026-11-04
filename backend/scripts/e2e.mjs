@@ -39,6 +39,7 @@ async function main() {
   const movies = await call('GET', '/movies');
   check('10 movies on the server', Array.isArray(movies.data) && movies.data.length === 10, `got ${movies.data?.length}`);
   check('movie 2 is Oppenheimer', movies.data?.[1]?.title === 'Oppenheimer', movies.data?.[1]?.title);
+  check('Dune has a YouTube trailer link', /youtube\.com\/watch\?v=/.test(movies.data?.[0]?.trailer_url ?? ''), movies.data?.[0]?.trailer_url);
 
   // 2. Accounts
   const tokenA = await signup('a');
