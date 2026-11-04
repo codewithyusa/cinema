@@ -29,6 +29,8 @@ const SHOWTIME_SELECT = `
   JOIN cinemas c ON c.id = h.cinema_id
 `;
 
+const DAYS_AHEAD = 7;
+
 @Injectable()
 export class CinemasService {
   constructor(private readonly db: DatabaseService) {
@@ -57,11 +59,12 @@ export class CinemasService {
         price_etb INTEGER NOT NULL
       )
     `);
-    this.seed();
+    this.seedCinemas();
+    this.ensureShowtimes();
   }
 
   // Runs once, only when there are no cinemas yet.
-  private seed() {
+  private seedCinemas() {
     const count = this.db.get<{ n: number }>('SELECT COUNT(*) AS n FROM cinemas');
     if (count && count.n > 0) return;
 
@@ -69,38 +72,68 @@ export class CinemasService {
       { name: 'YUSA Cinema Bole', address: 'Bole, Addis Ababa' },
       { name: 'YUSA Cinema Piassa', address: 'Piassa, Addis Ababa' },
     ];
-    const now = new Date();
 
     for (const branch of branches) {
       const cinemaId = Number(
         this.db.run('INSERT INTO cinemas (name, address) VALUES (?, ?)', branch.name, branch.address).lastInsertRowid,
       );
-      const hallIds = ['Hall 1', 'Hall 2'].map((name) =>
-        Number(
-          this.db.run(
-            'INSERT INTO halls (cinema_id, name, row_count, seats_per_row) VALUES (?, ?, ?, ?)',
-            cinemaId, name, 6, 8,
-          ).lastInsertRowid,
-        ),
-      );
+      for (const name of ['Hall 1', 'Hall 2']) {
+        this.db.run(
+          'INSERT INTO halls (cinema_id, name, row_count, seats_per_row) VALUES (?, ?, ?, ?)',
+          cinemaId, name, 6, 8,
+        );
+      }
+    }
+  }
 
-      for (let day = 0; day < 7; day++) {
-        // One set of showtimes for each of the 10 movies.
-        for (let movieId = 1; movieId <= 10; movieId++) {
-          const hallIndex = (movieId - 1) % 2;
-          const hours = movieId <= 2 ? [12, 18] : [15, 21];
-          for (const hour of hours) {
-            // Cinema time is UTC+3, so subtract 3 to store UTC.
-            const start = new Date(
-              Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + day, hour - 3),
-            );
-            this.db.run(
-              'INSERT INTO showtimes (movie_id, hall_id, starts_at, price_etb) VALUES (?, ?, ?, ?)',
-              movieId, hallIds[hallIndex], start.toISOString(), hallIndex === 0 ? 200 : 250,
-            );
+  // Runs on every start. Adds the missing showtimes for today and the next days,
+  // so the app never runs out of future showtimes. Existing ones are not duplicated.
+  private ensureShowtimes() {
+    const halls = this.db.all<{ id: number; cinema_id: number }>(
+      'SELECT id, cinema_id FROM halls ORDER BY cinema_id, id',
+    );
+    const hallsByCinema = new Map<number, number[]>();
+    for (const h of halls) {
+      const list = hallsByCinema.get(h.cinema_id) ?? [];
+      list.push(h.id);
+      hallsByCinema.set(h.cinema_id, list);
+    }
+
+    const now = new Date();
+    this.db.run('BEGIN IMMEDIATE');
+    try {
+      for (const hallIds of hallsByCinema.values()) {
+        if (hallIds.length < 2) continue;
+        for (let day = 0; day < DAYS_AHEAD; day++) {
+          for (let movieId = 1; movieId <= 10; movieId++) {
+            const hallIndex = (movieId - 1) % 2;
+            const hours = movieId <= 2 ? [12, 18] : [15, 21];
+            for (const hour of hours) {
+              // Cinema time is UTC+3, so subtract 3 to store UTC.
+              const start = new Date(
+                Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + day, hour - 3),
+              );
+              if (start.getTime() <= now.getTime()) continue;
+
+              const startsAt = start.toISOString();
+              const exists = this.db.get(
+                'SELECT id FROM showtimes WHERE movie_id = ? AND hall_id = ? AND starts_at = ?',
+                movieId, hallIds[hallIndex], startsAt,
+              );
+              if (exists) continue;
+
+              this.db.run(
+                'INSERT INTO showtimes (movie_id, hall_id, starts_at, price_etb) VALUES (?, ?, ?, ?)',
+                movieId, hallIds[hallIndex], startsAt, hallIndex === 0 ? 200 : 250,
+              );
+            }
           }
         }
       }
+      this.db.run('COMMIT');
+    } catch (e) {
+      this.db.run('ROLLBACK');
+      throw e;
     }
   }
 
