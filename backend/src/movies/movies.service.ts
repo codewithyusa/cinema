@@ -33,7 +33,11 @@ const TRAILER_IDS: Record<string, string> = {
   'Dune: Part Two': 'Mm456_D4ZvE',
   'Oppenheimer': 'GrT5lpK6L1E',
   'Inception': '7DwuVKfjctk',
+  'The Dark Knight': 'EXeTwQWrcwY',
   'Interstellar': '-gieJQejbHQ',
+  'Avatar: The Way of Water': 'd9MyW72ELq0',
+  'Spider-Man: Across the Spider-Verse': 'cqGjhVJWtEg',
+  'John Wick: Chapter 4': 'qEVUtrk8_B4',
   'Top Gun: Maverick': 'qSqVVswa420',
   'Furious 7': 'yISKeT6sDOg',
 };
