@@ -42,7 +42,12 @@ export async function request<T>(path: string, { method = 'GET', body, token }: 
     return data as T;
   } catch (e) {
     if (e instanceof ApiError) throw e;
-    throw new ApiError('Cannot reach the server. Check your connection and try again.', 0);
+    // Temporary debug info: remove the bracket part once the APK connects.
+    const reason = e instanceof Error ? e.message : String(e);
+    throw new ApiError(
+      `Cannot reach the server. Check your connection and try again. [${API_URL}${path}: ${reason}]`,
+      0,
+    );
   } finally {
     clearTimeout(timer);
   }
