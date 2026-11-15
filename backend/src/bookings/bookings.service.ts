@@ -22,6 +22,9 @@ type BookingRow = {
 
 const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
+// Seats are stored as "E8,F8", so the number of seats is the number of commas + 1.
+const seatsIn = (column: string) => `(LENGTH(${column}) - LENGTH(REPLACE(${column}, ',', '')) + 1)`;
+
 @Injectable()
 export class BookingsService {
   constructor(
@@ -209,5 +212,59 @@ export class BookingsService {
       row.id,
     );
     return { status: 'valid' as const, ticket };
+  }
+
+  // Sales numbers for the admin dashboard. Cancelled bookings are not counted.
+  stats() {
+    const totals = this.db.get<{ bookings: number; tickets: number; revenue_etb: number }>(
+      `SELECT COUNT(*) AS bookings,
+              COALESCE(SUM(${seatsIn('seats')}), 0) AS tickets,
+              COALESCE(SUM(total_etb), 0) AS revenue_etb
+       FROM bookings
+       WHERE cancelled_at IS NULL`,
+    );
+
+    const cancelled = this.db.get<{ n: number }>(
+      'SELECT COUNT(*) AS n FROM bookings WHERE cancelled_at IS NOT NULL',
+    );
+
+    // Start of today in cinema time (UTC+3), as a UTC timestamp.
+    const local = new Date(Date.now() + 3 * 3600 * 1000);
+    const startOfToday = new Date(
+      Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate()) - 3 * 3600 * 1000,
+    ).toISOString();
+    const scannedToday = this.db.get<{ n: number }>(
+      'SELECT COUNT(*) AS n FROM bookings WHERE used_at >= ?',
+      startOfToday,
+    );
+
+    const perMovie = this.db.all<{
+      movie_id: number;
+      title: string;
+      bookings: number;
+      tickets: number;
+      revenue_etb: number;
+    }>(
+      `SELECT m.id AS movie_id,
+              m.title,
+              COUNT(b.id) AS bookings,
+              SUM(${seatsIn('b.seats')}) AS tickets,
+              SUM(b.total_etb) AS revenue_etb
+       FROM bookings b
+       JOIN showtimes s ON s.id = b.showtime_id
+       JOIN movies m ON m.id = s.movie_id
+       WHERE b.cancelled_at IS NULL
+       GROUP BY m.id
+       ORDER BY revenue_etb DESC`,
+    );
+
+    return {
+      bookings: totals?.bookings ?? 0,
+      tickets_sold: totals?.tickets ?? 0,
+      revenue_etb: totals?.revenue_etb ?? 0,
+      cancelled: cancelled?.n ?? 0,
+      scanned_today: scannedToday?.n ?? 0,
+      per_movie: perMovie,
+    };
   }
 }
