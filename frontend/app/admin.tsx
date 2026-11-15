@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Image, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '../src/components/Icon';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -18,6 +18,8 @@ type Stats = {
 
 type Hall = { id: number; hall_name: string; cinema_name: string };
 type Tab = 'stats' | 'movie' | 'showtime';
+
+const GENRES = ['Action', 'Drama', 'Sci-fi', 'Animation', 'Adventure', 'Comedy', 'Horror', 'Thriller'];
 
 const etb = (n: number) => `${n.toLocaleString()} ETB`;
 
@@ -259,7 +261,14 @@ export default function Admin() {
         {tab === 'movie' ? (
           <>
             <Field label="Title" value={movie.title} onChangeText={(v) => setMovie({ ...movie, title: v })} />
-            <Field label="Genre" value={movie.genre} onChangeText={(v) => setMovie({ ...movie, genre: v })} placeholder="Action, Drama, Sci-fi..." />
+
+            <Text style={labelStyle}>Genre</Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+              {GENRES.map((g) => (
+                <Chip key={g} label={g} active={movie.genre === g} onPress={() => setMovie({ ...movie, genre: g })} />
+              ))}
+            </View>
+
             <View style={{ flexDirection: 'row', gap: 12 }}>
               <View style={{ flex: 1 }}>
                 <Field
@@ -285,6 +294,7 @@ export default function Admin() {
               onChangeText={(v) => setMovie({ ...movie, poster: v })}
               placeholder="https://..."
             />
+            <PosterPreview url={movie.poster.trim()} />
             <Field
               label="Trailer link (optional)"
               value={movie.trailer}
@@ -345,6 +355,30 @@ const inputStyle = {
   fontSize: 16,
   paddingHorizontal: 14,
 };
+
+// Shows the poster under the link field. The key resets the error when the link changes.
+function PosterPreview({ url }: { url: string }) {
+  if (!/^https?:\/\//i.test(url)) return null;
+  return <PosterImage key={url} url={url} />;
+}
+
+function PosterImage({ url }: { url: string }) {
+  const [failed, setFailed] = useState(false);
+  return (
+    <View style={{ alignItems: 'center', gap: 6 }}>
+      {failed ? (
+        <Text style={{ color: colors.redText, fontSize: 13 }}>This link is not an image.</Text>
+      ) : (
+        <Image
+          source={{ uri: url }}
+          onError={() => setFailed(true)}
+          style={{ width: 120, height: 180, borderRadius: 12, backgroundColor: colors.surface }}
+          resizeMode="cover"
+        />
+      )}
+    </View>
+  );
+}
 
 function Field({
   label,
