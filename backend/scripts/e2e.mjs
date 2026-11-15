@@ -1,4 +1,6 @@
 const API = process.env.API_URL ?? 'http://localhost:8080';
+// Must match STAFF_KEY in backend/.env
+const STAFF_KEY = process.env.STAFF_KEY ?? 'choose-a-long-secret';
 let passed = 0;
 let failed = 0;
 
@@ -20,6 +22,16 @@ async function call(method, path, token, body) {
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
     body: body ? JSON.stringify(body) : undefined,
+  });
+  const data = await res.json().catch(() => null);
+  return { status: res.status, data };
+}
+
+// Staff ticket scan: uses the staff key header instead of a user token.
+async function scan(code, key) {
+  const res = await fetch(`${API}/staff/verify/${encodeURIComponent(code)}`, {
+    method: 'POST',
+    headers: key ? { 'x-staff-key': key } : {},
   });
   const data = await res.json().catch(() => null);
   return { status: res.status, data };
@@ -119,7 +131,35 @@ async function main() {
   const none = await call('GET', '/bookings', tokenB);
   check('other user does not see my booking', Array.isArray(none.data) && none.data.length === 0);
 
+  // 8a. Staff ticket scan (before the booking is cancelled)
+  console.log('');
+  const code = booking.data?.code;
+
+  const noKey = await scan(code, null);
+  check('scan without a staff key rejected (401)', noKey.status === 401, `status ${noKey.status}`);
+
+  const wrongKey = await scan(code, 'wrong-key');
+  check('scan with a wrong staff key rejected (401)', wrongKey.status === 401, `status ${wrongKey.status}`);
+
+  const first = await scan(code, STAFF_KEY);
+  check('first scan is valid', first.status < 300 && first.data?.status === 'valid' && first.data?.ticket?.code === code, JSON.stringify(first.data));
+  check(
+    'scan shows the movie and both seats',
+    first.data?.ticket?.movie_title === 'Oppenheimer' && first.data?.ticket?.seats?.length === 2,
+    JSON.stringify(first.data?.ticket),
+  );
+
+  const second = await scan(code, STAFF_KEY);
+  check('second scan says already used', second.data?.status === 'used' && !!second.data?.used_at, JSON.stringify(second.data));
+
+  const lower = await scan(code.toLowerCase(), STAFF_KEY);
+  check('lowercase code also says already used', lower.data?.status === 'used', JSON.stringify(lower.data));
+
+  const fakeScan = await scan('YCZZZZZZ', STAFF_KEY);
+  check('unknown code says invalid', fakeScan.status < 300 && fakeScan.data?.status === 'invalid', JSON.stringify(fakeScan.data));
+
   // 8b. Cancel
+  console.log('');
   const stranger = await call('DELETE', `/bookings/${booking.data?.code}`, tokenB);
   check('other user cannot cancel my booking (404)', stranger.status === 404, `status ${stranger.status}`);
 
@@ -135,6 +175,9 @@ async function main() {
 
   const twice = await call('DELETE', `/bookings/${booking.data?.code}`, tokenA);
   check('cancelling twice is harmless', twice.status < 300 && twice.data?.cancelled === true, `status ${twice.status}`);
+
+  const scanCancelled = await scan(code, STAFF_KEY);
+  check('cancelled ticket scans as cancelled', scanCancelled.data?.status === 'cancelled', JSON.stringify(scanCancelled.data));
 
   // 9. Security
   const noToken = await call('POST', '/bookings', null, { showtimeId: id, method: 'cash' });
