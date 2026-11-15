@@ -17,6 +17,8 @@ export default function Profile() {
   const [profile, setProfile] = useState<ProfileData>({});
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
+  // Staff tools (scanner, admin) are hidden from customers. Long-press the title to show them.
+  const [staffTools, setStaffTools] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -75,7 +77,9 @@ export default function Profile() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg, paddingTop: insets.top + 16 }}>
       <ScrollView contentContainerStyle={{ padding: 20, gap: 20 }} keyboardShouldPersistTaps="handled">
-        <Text style={{ color: colors.text, fontSize: 26, fontWeight: '800' }}>Profile</Text>
+        <Pressable onLongPress={() => setStaffTools((v) => !v)} delayLongPress={800}>
+          <Text style={{ color: colors.text, fontSize: 26, fontWeight: '800' }}>Profile</Text>
+        </Pressable>
 
         <View style={{ alignItems: 'center', gap: 10, backgroundColor: colors.surface, borderRadius: 22, padding: 24 }}>
           <Pressable onPress={pickPhoto}>
@@ -156,8 +160,12 @@ export default function Profile() {
         <View style={{ backgroundColor: colors.surface, borderRadius: 18, paddingHorizontal: 14 }}>
           <MenuItem icon="ticket-outline" label="My tickets" onPress={() => router.push('/tickets')} />
           <MenuItem icon="notifications-outline" label="Notifications" onPress={() => router.push('/notifications')} />
-          <MenuItem icon="qr-code-outline" label="Ticket scanner" onPress={() => router.push('/scanner')} />
-          <MenuItem icon="stats-chart-outline" label="Admin" onPress={() => router.push('/admin')} />
+          {staffTools ? (
+            <>
+              <MenuItem icon="qr-code-outline" label="Ticket scanner (staff)" onPress={() => router.push('/scanner')} />
+              <MenuItem icon="stats-chart-outline" label="Admin (staff)" onPress={() => router.push('/admin')} />
+            </>
+          ) : null}
           <MenuItem icon="settings-outline" label="Settings" onPress={() => router.push('/settings')} last />
         </View>
 
