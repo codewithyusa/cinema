@@ -289,7 +289,8 @@ async function main() {
   check('coming soon has no past releases', dates.every((d) => d >= todayStr), dates.join(','));
 
   // 13. Admin. Wrong or missing keys are rejected. We only test movie rules that
-  // fail, so the test does not leave extra movies behind.
+  // fail, so the test does not leave extra movies behind. The showtime added here
+  // is deleted again in section 14.
   console.log('');
   const statsNoKey = await admin('GET', '/admin/stats', null);
   check('stats without an admin key rejected (401)', statsNoKey.status === 401, `status ${statsNoKey.status}`);
@@ -374,6 +375,86 @@ async function main() {
 
   const stHall = await admin('POST', '/admin/showtimes', ADMIN_KEY, { ...stBody, hallId: 9999 });
   check('showtime for an unknown hall rejected (404)', stHall.status === 404, `status ${stHall.status}`);
+
+  // 14. Admin: stats ranges, hide or show a movie, delete a showtime
+  console.log('');
+  const rToday = await admin('GET', '/admin/stats?range=today', ADMIN_KEY);
+  const r7 = await admin('GET', '/admin/stats?range=7d', ADMIN_KEY);
+  const rAll = await admin('GET', '/admin/stats?range=all', ADMIN_KEY);
+  check(
+    'stats work for today, 7 days and all time',
+    [rToday, r7, rAll].every((r) => r.status === 200 && typeof r.data?.revenue_etb === 'number'),
+    `${rToday.status}, ${r7.status}, ${rAll.status}`,
+  );
+  check(
+    'revenue today <= 7 days <= all time',
+    rToday.data?.revenue_etb <= r7.data?.revenue_etb && r7.data?.revenue_etb <= rAll.data?.revenue_etb,
+    `${rToday.data?.revenue_etb}, ${r7.data?.revenue_etb}, ${rAll.data?.revenue_etb}`,
+  );
+
+  const amNoKey = await admin('GET', '/admin/movies', null);
+  check('admin movie list without a key rejected (401)', amNoKey.status === 401, `status ${amNoKey.status}`);
+
+  const am = await admin('GET', '/admin/movies', ADMIN_KEY);
+  check(
+    'admin movie list has the hidden field',
+    Array.isArray(am.data) && am.data.length >= 10 && am.data.every((m) => m.hidden === 0 || m.hidden === 1),
+    JSON.stringify(am.data?.[0]),
+  );
+
+  const hideNoKey = await admin('PATCH', '/admin/movies/10/hidden', null, { hidden: true });
+  check('hide movie without a key rejected (401)', hideNoKey.status === 401, `status ${hideNoKey.status}`);
+
+  // Movie 10 is hidden for a moment and shown again below. If this test stops
+  // halfway, show it again from Admin -> Manage.
+  const hide = await admin('PATCH', '/admin/movies/10/hidden', ADMIN_KEY, { hidden: true });
+  check('movie 10 hidden', hide.status < 300 && hide.data?.hidden === 1, JSON.stringify(hide.data));
+
+  const pubHidden = await call('GET', '/movies');
+  check('hidden movie leaves the public list', !pubHidden.data?.some((m) => m.id === 10));
+
+  const adminStill = await admin('GET', '/admin/movies', ADMIN_KEY);
+  check('hidden movie stays in the admin list', adminStill.data?.some((m) => m.id === 10 && m.hidden === 1));
+
+  const showsHidden = await call('GET', '/showtimes?movieId=10');
+  check('hidden movie has no public showtimes', Array.isArray(showsHidden.data) && showsHidden.data.length === 0, `got ${showsHidden.data?.length}`);
+
+  const unhide = await admin('PATCH', '/admin/movies/10/hidden', ADMIN_KEY, { hidden: false });
+  check('movie 10 visible again', unhide.status < 300 && unhide.data?.hidden === 0, JSON.stringify(unhide.data));
+
+  const pubBack = await call('GET', '/movies');
+  check('movie 10 is back in the public list', pubBack.data?.some((m) => m.id === 10));
+
+  const hideUnknown = await admin('PATCH', '/admin/movies/9999/hidden', ADMIN_KEY, { hidden: true });
+  check('hide an unknown movie rejected (404)', hideUnknown.status === 404, `status ${hideUnknown.status}`);
+
+  // Delete the 2031 showtime that section 13 added.
+  const stId = stAdd.data?.id;
+  const delNoKey = await admin('DELETE', `/admin/showtimes/${stId}`, null);
+  check('delete showtime without a key rejected (401)', delNoKey.status === 401, `status ${delNoKey.status}`);
+
+  const del = await admin('DELETE', `/admin/showtimes/${stId}`, ADMIN_KEY);
+  check('showtime deleted', del.status < 300 && del.data?.deleted === true, JSON.stringify(del.data));
+
+  const stGone = await call('GET', '/showtimes?movieId=2');
+  check('deleted showtime leaves the public list', !stGone.data?.some((s) => s.id === stId));
+
+  const delTwice = await admin('DELETE', `/admin/showtimes/${stId}`, ADMIN_KEY);
+  check('deleting the same showtime again rejected (404)', delTwice.status === 404, `status ${delTwice.status}`);
+
+  // A showtime with an active booking cannot be deleted.
+  await call('POST', `/showtimes/${id}/seats/hold`, tokenB, { seats: [seats[0]] });
+  const bookB = await call('POST', '/bookings', tokenB, { showtimeId: id, method: 'cash' });
+  check('test booking created', bookB.status < 300 && !!bookB.data?.code, JSON.stringify(bookB.data));
+
+  const delBooked = await admin('DELETE', `/admin/showtimes/${id}`, ADMIN_KEY);
+  check('showtime with a booking cannot be deleted (409)', delBooked.status === 409, `status ${delBooked.status}`);
+
+  const adminSt = await admin('GET', '/admin/showtimes?movieId=2', ADMIN_KEY);
+  check('admin showtime list shows the booking count', adminSt.data?.find((s) => s.id === id)?.bookings >= 1, JSON.stringify(adminSt.data?.[0]));
+
+  // Clean up: cancel the test booking so its seat is free again.
+  await call('DELETE', `/bookings/${bookB.data?.code}`, tokenB);
 }
 
 main()
