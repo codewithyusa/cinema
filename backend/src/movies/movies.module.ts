@@ -11,5 +11,6 @@ import { WatchlistService } from './watchlist.service';
 @Module({
   controllers: [MoviesController, ReviewsController, WatchlistController, ComingSoonController],
   providers: [MoviesService, ReviewsService, WatchlistService, ComingSoonService],
+  exports: [MoviesService],
 })
 export class MoviesModule {}

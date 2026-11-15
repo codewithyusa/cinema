@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from '../db/database.service';
 
 export type Movie = {
@@ -92,5 +92,48 @@ export class MoviesService {
     const movie = this.db.get<Movie>('SELECT * FROM movies WHERE id = ?', id);
     if (!movie) throw new NotFoundException('Movie not found.');
     return movie;
+  }
+
+  // Admin: adds a new movie. Its id continues after the 10 seeded ones.
+  create(input: {
+    title?: string;
+    genre?: string;
+    duration_min?: number;
+    rating?: number;
+    synopsis?: string;
+    poster_url?: string;
+    trailer_url?: string;
+  }): Movie {
+    const title = String(input.title ?? '').trim();
+    const genre = String(input.genre ?? '').trim();
+    const synopsis = String(input.synopsis ?? '').trim();
+    const duration = Number(input.duration_min);
+    const rating = Number(input.rating ?? 0);
+    const poster = String(input.poster_url ?? '').trim();
+    const trailer = String(input.trailer_url ?? '').trim();
+
+    if (!title || !genre || !synopsis) {
+      throw new BadRequestException('Title, genre and synopsis are required.');
+    }
+    if (!Number.isInteger(duration) || duration < 30 || duration > 400) {
+      throw new BadRequestException('Duration must be 30 to 400 minutes.');
+    }
+    if (!(rating >= 0 && rating <= 10)) {
+      throw new BadRequestException('Rating must be 0 to 10.');
+    }
+    for (const url of [poster, trailer]) {
+      if (url && !/^https?:\/\//i.test(url)) {
+        throw new BadRequestException('Links must start with http:// or https://');
+      }
+    }
+    if (this.db.get('SELECT id FROM movies WHERE LOWER(title) = LOWER(?)', title)) {
+      throw new ConflictException('A movie with this title already exists.');
+    }
+
+    const result = this.db.run(
+      'INSERT INTO movies (title, genre, duration_min, rating, synopsis, poster_url, trailer_url) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      title, genre, duration, rating, synopsis, poster || null, trailer || null,
+    );
+    return this.get(Number(result.lastInsertRowid));
   }
 }
