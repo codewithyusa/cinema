@@ -63,6 +63,8 @@ export default function Admin() {
   const [time, setTime] = useState('19:30');
   const [price, setPrice] = useState('250');
 
+  const goBack = () => (router.canGoBack() ? router.back() : router.replace('/profile'));
+
   const load = useCallback(async () => {
     setLoading(true);
     setError('');
@@ -142,7 +144,7 @@ export default function Admin() {
   const header = (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 20, paddingTop: insets.top + 12 }}>
       <Pressable
-        onPress={() => router.back()}
+        onPress={goBack}
         style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' }}
       >
         <Ionicons name="chevron-back" size={22} color={colors.text} />

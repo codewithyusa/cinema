@@ -97,6 +97,8 @@ export default function Scanner() {
   const [checking, setChecking] = useState(false);
   const locked = useRef(false);
 
+  const goBack = () => (router.canGoBack() ? router.back() : router.replace('/profile'));
+
   const onScan = async ({ data }: { data: string }) => {
     if (locked.current) return;
     locked.current = true;
@@ -113,7 +115,7 @@ export default function Scanner() {
   const header = (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 20, paddingTop: insets.top + 12 }}>
       <Pressable
-        onPress={() => router.back()}
+        onPress={goBack}
         style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' }}
       >
         <Ionicons name="chevron-back" size={22} color={colors.text} />
