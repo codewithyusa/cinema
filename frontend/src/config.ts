@@ -10,3 +10,6 @@ const PC_IP = '192.168.100.24';
 const host = Constants.expoConfig?.hostUri?.split(':')[0] ?? PC_IP;
 
 export const API_URL = process.env.EXPO_PUBLIC_API_URL ?? `http://${host}:8080`;
+
+// Used by the staff ticket scanner. Must match STAFF_KEY in backend/.env.
+export const STAFF_KEY = process.env.EXPO_PUBLIC_STAFF_KEY ?? 'choose-a-long-secret';

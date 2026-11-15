@@ -1,14 +1,16 @@
 import { useRef, useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Ionicons } from '../src/components/Icon';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../src/theme/colors';
 import { getMovie } from '../src/api/movies';
+import { API_URL, STAFF_KEY } from '../src/config';
 
 type Result = {
-  status: 'valid' | 'used' | 'invalid';
+  status: 'valid' | 'used' | 'cancelled' | 'invalid' | 'error';
+  message?: string;
   code?: string;
   title?: string;
   cinema?: string;
@@ -17,38 +19,74 @@ type Result = {
   seats?: string;
 };
 
-// Codes scanned in this session. Resets when the app restarts.
+// Old phone-only tickets (code like YC-123456) are checked on this phone only.
 const usedCodes = new Set<string>();
 
-function checkTicket(raw: string): Result {
+function checkLocal(data: any): Result {
+  const movie = getMovie(String(data.movie));
+  if (!movie) return { status: 'invalid' };
+
+  const info = {
+    code: data.code,
+    title: movie.title,
+    cinema: data.cinema,
+    date: data.date,
+    time: data.time,
+    seats: typeof data.seats === 'string' ? data.seats.split(',').join(', ') : '',
+  };
+
+  if (usedCodes.has(data.code)) return { status: 'used', ...info };
+  usedCodes.add(data.code);
+  return { status: 'valid', ...info };
+}
+
+async function checkTicket(raw: string): Promise<Result> {
+  let data: any;
   try {
-    const data = JSON.parse(raw);
-    if (typeof data?.code !== 'string' || !data.code.startsWith('YC-')) return { status: 'invalid' };
-
-    const movie = getMovie(String(data.movie));
-    if (!movie) return { status: 'invalid' };
-
-    const info = {
-      code: data.code,
-      title: movie.title,
-      cinema: data.cinema,
-      date: data.date,
-      time: data.time,
-      seats: typeof data.seats === 'string' ? data.seats.split(',').join(', ') : '',
-    };
-
-    if (usedCodes.has(data.code)) return { status: 'used', ...info };
-    usedCodes.add(data.code);
-    return { status: 'valid', ...info };
+    data = JSON.parse(raw);
   } catch {
     return { status: 'invalid' };
+  }
+  if (typeof data?.code !== 'string' || !data.code.startsWith('YC')) return { status: 'invalid' };
+
+  // Old phone-only tickets have a dash and no server record.
+  if (data.code.startsWith('YC-')) return checkLocal(data);
+
+  try {
+    const code = data.code.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+    const res = await fetch(`${API_URL}/staff/verify/${code}`, {
+      method: 'POST',
+      headers: { 'x-staff-key': STAFF_KEY },
+    });
+
+    if (res.status === 401) return { status: 'error', message: 'Wrong staff key in the app.' };
+    if (!res.ok) return { status: 'error', message: 'Server error. Try again.' };
+
+    const r = await res.json();
+    if (r.status === 'invalid' || !r.ticket) return { status: 'invalid' };
+
+    const t = r.ticket;
+    const d = new Date(t.starts_at);
+    return {
+      status: r.status,
+      code: t.code,
+      title: t.movie_title,
+      cinema: `${t.cinema_name} · ${t.hall_name}`,
+      date: d.toLocaleDateString(),
+      time: d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      seats: t.seats.join(', '),
+    };
+  } catch {
+    return { status: 'error', message: 'Cannot reach the server.' };
   }
 }
 
 const banner = {
   valid: { color: '#22C55E', mark: '✓', text: 'Valid ticket' },
   used: { color: '#F59E0B', mark: '!', text: 'Already used' },
+  cancelled: { color: '#EF4444', mark: '✕', text: 'Cancelled ticket' },
   invalid: { color: '#EF4444', mark: '✕', text: 'Invalid ticket' },
+  error: { color: '#EF4444', mark: '!', text: 'Could not check' },
 } as const;
 
 export default function Scanner() {
@@ -56,12 +94,15 @@ export default function Scanner() {
   const insets = useSafeAreaInsets();
   const [permission, requestPermission] = useCameraPermissions();
   const [result, setResult] = useState<Result | null>(null);
+  const [checking, setChecking] = useState(false);
   const locked = useRef(false);
 
-  const onScan = ({ data }: { data: string }) => {
+  const onScan = async ({ data }: { data: string }) => {
     if (locked.current) return;
     locked.current = true;
-    setResult(checkTicket(data));
+    setChecking(true);
+    setResult(await checkTicket(data));
+    setChecking(false);
   };
 
   const scanNext = () => {
@@ -105,6 +146,7 @@ export default function Scanner() {
   }
 
   const b = result ? banner[result.status] : null;
+  const hasTicket = result?.status === 'valid' || result?.status === 'used' || result?.status === 'cancelled';
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
@@ -116,11 +158,15 @@ export default function Scanner() {
             style={{ flex: 1 }}
             facing="back"
             barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
-            onBarcodeScanned={result ? undefined : onScan}
+            onBarcodeScanned={result || checking ? undefined : onScan}
           />
           {!result ? (
             <View pointerEvents="none" style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, alignItems: 'center', justifyContent: 'center' }}>
-              <View style={{ width: 220, height: 220, borderRadius: 20, borderWidth: 3, borderColor: '#fff' }} />
+              {checking ? (
+                <ActivityIndicator size="large" color="#fff" />
+              ) : (
+                <View style={{ width: 220, height: 220, borderRadius: 20, borderWidth: 3, borderColor: '#fff' }} />
+              )}
             </View>
           ) : null}
         </View>
@@ -132,7 +178,7 @@ export default function Scanner() {
               <Text style={{ color: b.color, fontSize: 20, fontWeight: '800' }}>{b.text}</Text>
             </View>
 
-            {result.status !== 'invalid' ? (
+            {hasTicket ? (
               <View style={{ gap: 3 }}>
                 <Text style={{ color: colors.text, fontSize: 16, fontWeight: '800' }}>{result.title}</Text>
                 <Text style={{ color: colors.muted, fontSize: 13 }}>{result.cinema}</Text>
@@ -143,7 +189,9 @@ export default function Scanner() {
                 <Text style={{ color: colors.muted, fontSize: 12, marginTop: 4 }}>{result.code}</Text>
               </View>
             ) : (
-              <Text style={{ color: colors.muted, fontSize: 13 }}>This QR code is not a YUSA CINEMA ticket.</Text>
+              <Text style={{ color: colors.muted, fontSize: 13 }}>
+                {result.message ?? 'This QR code is not a YUSA CINEMA ticket.'}
+              </Text>
             )}
 
             <Pressable
