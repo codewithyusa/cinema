@@ -1,6 +1,7 @@
 const API = process.env.API_URL ?? 'http://localhost:8080';
-// Must match STAFF_KEY in backend/.env
+// Must match STAFF_KEY and ADMIN_KEY in backend/.env
 const STAFF_KEY = process.env.STAFF_KEY ?? 'choose-a-long-secret';
+const ADMIN_KEY = process.env.ADMIN_KEY ?? 'choose-a-long-admin-secret';
 let passed = 0;
 let failed = 0;
 
@@ -37,6 +38,20 @@ async function scan(code, key) {
   return { status: res.status, data };
 }
 
+// Admin calls: use the admin key header instead of a user token.
+async function admin(method, path, key, body) {
+  const res = await fetch(API + path, {
+    method,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(key ? { 'x-admin-key': key } : {}),
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const data = await res.json().catch(() => null);
+  return { status: res.status, data };
+}
+
 async function signup(tag) {
   const email = `e2e${tag}${Date.now()}@example.com`;
   const r = await call('POST', '/auth/signup', null, { name: 'E2E Tester', email, password: 'secret123' });
@@ -49,7 +64,7 @@ async function main() {
 
   // 1. Movies
   const movies = await call('GET', '/movies');
-  check('10 movies on the server', Array.isArray(movies.data) && movies.data.length === 10, `got ${movies.data?.length}`);
+  check('at least 10 movies on the server', Array.isArray(movies.data) && movies.data.length >= 10, `got ${movies.data?.length}`);
   check('movie 2 is Oppenheimer', movies.data?.[1]?.title === 'Oppenheimer', movies.data?.[1]?.title);
   check('Dune has a YouTube trailer link', /youtube\.com\/watch\?v=/.test(movies.data?.[0]?.trailer_url ?? ''), movies.data?.[0]?.trailer_url);
 
@@ -272,6 +287,93 @@ async function main() {
 
   const todayStr = new Date().toISOString().slice(0, 10);
   check('coming soon has no past releases', dates.every((d) => d >= todayStr), dates.join(','));
+
+  // 13. Admin. Wrong or missing keys are rejected. We only test movie rules that
+  // fail, so the test does not leave extra movies behind.
+  console.log('');
+  const statsNoKey = await admin('GET', '/admin/stats', null);
+  check('stats without an admin key rejected (401)', statsNoKey.status === 401, `status ${statsNoKey.status}`);
+
+  const statsWrong = await admin('GET', '/admin/stats', 'wrong-key');
+  check('stats with a wrong admin key rejected (401)', statsWrong.status === 401, `status ${statsWrong.status}`);
+
+  const stats = await admin('GET', '/admin/stats', ADMIN_KEY);
+  check(
+    'stats returns the sales numbers',
+    stats.status === 200 &&
+      typeof stats.data?.revenue_etb === 'number' &&
+      typeof stats.data?.tickets_sold === 'number' &&
+      typeof stats.data?.bookings === 'number' &&
+      Array.isArray(stats.data?.per_movie),
+    JSON.stringify(stats.data),
+  );
+  check('stats counts the ticket scanned in this test', stats.data?.scanned_today >= 1, `got ${stats.data?.scanned_today}`);
+
+  const hallsNoKey = await admin('GET', '/admin/halls', null);
+  check('halls without an admin key rejected (401)', hallsNoKey.status === 401, `status ${hallsNoKey.status}`);
+
+  const halls = await admin('GET', '/admin/halls', ADMIN_KEY);
+  check(
+    'halls list has cinema and hall names',
+    Array.isArray(halls.data) && halls.data.length >= 2 && halls.data.every((h) => h.id && h.hall_name && h.cinema_name),
+    JSON.stringify(halls.data),
+  );
+  const hallId = halls.data?.[0]?.id;
+
+  const movieOk = { title: 'Oppenheimer', genre: 'Drama', duration_min: 180, rating: 8, synopsis: 'Test synopsis.' };
+
+  const mvNoKey = await admin('POST', '/admin/movies', null, movieOk);
+  check('add movie without an admin key rejected (401)', mvNoKey.status === 401, `status ${mvNoKey.status}`);
+
+  const mvMissing = await admin('POST', '/admin/movies', ADMIN_KEY, { title: 'No genre' });
+  check('add movie with missing fields rejected (400)', mvMissing.status === 400, `status ${mvMissing.status}`);
+
+  const mvShort = await admin('POST', '/admin/movies', ADMIN_KEY, { ...movieOk, title: 'Too Short', duration_min: 5 });
+  check('add movie with duration 5 rejected (400)', mvShort.status === 400, `status ${mvShort.status}`);
+
+  const mvLink = await admin('POST', '/admin/movies', ADMIN_KEY, { ...movieOk, title: 'Bad Link', poster_url: 'ftp://x/y.jpg' });
+  check('add movie with a bad poster link rejected (400)', mvLink.status === 400, `status ${mvLink.status}`);
+
+  const mvDup = await admin('POST', '/admin/movies', ADMIN_KEY, movieOk);
+  check('add movie with an existing title rejected (409)', mvDup.status === 409, `status ${mvDup.status}`);
+
+  // A showtime far in the future, at a random date and time so reruns do not clash.
+  const mm = String(1 + Math.floor(Math.random() * 12)).padStart(2, '0');
+  const dd = String(1 + Math.floor(Math.random() * 28)).padStart(2, '0');
+  const hh = String(Math.floor(Math.random() * 24)).padStart(2, '0');
+  const mi = String(Math.floor(Math.random() * 60)).padStart(2, '0');
+  const stDate = `2031-${mm}-${dd}`;
+  const stTime = `${hh}:${mi}`;
+  const stBody = { movieId: 2, hallId, date: stDate, time: stTime, priceEtb: 300 };
+  const expectedStart = new Date(Date.UTC(2031, +mm - 1, +dd, +hh - 3, +mi)).toISOString();
+
+  const stAdd = await admin('POST', '/admin/showtimes', ADMIN_KEY, stBody);
+  check(
+    'showtime added (cinema time is stored as UTC)',
+    stAdd.status < 300 && stAdd.data?.movie_title === 'Oppenheimer' && stAdd.data?.starts_at === expectedStart && stAdd.data?.price_etb === 300,
+    JSON.stringify(stAdd.data),
+  );
+
+  const stList = await call('GET', '/showtimes?movieId=2');
+  check('new showtime appears in the public list', stList.data?.some((s) => s.id === stAdd.data?.id), `id ${stAdd.data?.id}`);
+
+  const stDup = await admin('POST', '/admin/showtimes', ADMIN_KEY, stBody);
+  check('same hall and time again rejected (409)', stDup.status === 409, `status ${stDup.status}`);
+
+  const stPast = await admin('POST', '/admin/showtimes', ADMIN_KEY, { ...stBody, date: '2020-01-01', time: '10:00' });
+  check('showtime in the past rejected (400)', stPast.status === 400, `status ${stPast.status}`);
+
+  const stTimeBad = await admin('POST', '/admin/showtimes', ADMIN_KEY, { ...stBody, time: '25:99' });
+  check('showtime with a bad time rejected (400)', stTimeBad.status === 400, `status ${stTimeBad.status}`);
+
+  const stPrice = await admin('POST', '/admin/showtimes', ADMIN_KEY, { ...stBody, priceEtb: 10 });
+  check('showtime with price 10 rejected (400)', stPrice.status === 400, `status ${stPrice.status}`);
+
+  const stMovie = await admin('POST', '/admin/showtimes', ADMIN_KEY, { ...stBody, movieId: 9999 });
+  check('showtime for an unknown movie rejected (404)', stMovie.status === 404, `status ${stMovie.status}`);
+
+  const stHall = await admin('POST', '/admin/showtimes', ADMIN_KEY, { ...stBody, hallId: 9999 });
+  check('showtime for an unknown hall rejected (404)', stHall.status === 404, `status ${stHall.status}`);
 }
 
 main()
