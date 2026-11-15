@@ -20,6 +20,8 @@ type BookingRow = {
   used_at: string | null;
 };
 
+export type StatsRange = 'today' | '7d' | 'all';
+
 const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
 // Seats are stored as "E8,F8", so the number of seats is the number of commas + 1.
@@ -214,28 +216,37 @@ export class BookingsService {
     return { status: 'valid' as const, ticket };
   }
 
-  // Sales numbers for the admin dashboard. Cancelled bookings are not counted.
-  stats() {
+  // Sales numbers for the admin dashboard. Cancelled bookings are not counted as sales.
+  stats(range: StatsRange = 'all') {
+    // Start of today in cinema time (UTC+3), as a UTC timestamp in milliseconds.
+    const local = new Date(Date.now() + 3 * 3600 * 1000);
+    const startOfToday =
+      Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate()) - 3 * 3600 * 1000;
+
+    // created_at is stored as "YYYY-MM-DD HH:MM:SS" (UTC).
+    const sinceMs = range === 'today' ? startOfToday : range === '7d' ? startOfToday - 6 * 86400 * 1000 : null;
+    const since = sinceMs === null ? null : new Date(sinceMs).toISOString().slice(0, 19).replace('T', ' ');
+    const sinceSql = since ? ' AND created_at >= ?' : '';
+    const sinceSqlB = since ? ' AND b.created_at >= ?' : '';
+    const args: string[] = since ? [since] : [];
+
     const totals = this.db.get<{ bookings: number; tickets: number; revenue_etb: number }>(
       `SELECT COUNT(*) AS bookings,
               COALESCE(SUM(${seatsIn('seats')}), 0) AS tickets,
               COALESCE(SUM(total_etb), 0) AS revenue_etb
        FROM bookings
-       WHERE cancelled_at IS NULL`,
+       WHERE cancelled_at IS NULL${sinceSql}`,
+      ...args,
     );
 
     const cancelled = this.db.get<{ n: number }>(
-      'SELECT COUNT(*) AS n FROM bookings WHERE cancelled_at IS NOT NULL',
+      `SELECT COUNT(*) AS n FROM bookings WHERE cancelled_at IS NOT NULL${sinceSql}`,
+      ...args,
     );
 
-    // Start of today in cinema time (UTC+3), as a UTC timestamp.
-    const local = new Date(Date.now() + 3 * 3600 * 1000);
-    const startOfToday = new Date(
-      Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate()) - 3 * 3600 * 1000,
-    ).toISOString();
     const scannedToday = this.db.get<{ n: number }>(
       'SELECT COUNT(*) AS n FROM bookings WHERE used_at >= ?',
-      startOfToday,
+      new Date(startOfToday).toISOString(),
     );
 
     const perMovie = this.db.all<{
@@ -253,9 +264,10 @@ export class BookingsService {
        FROM bookings b
        JOIN showtimes s ON s.id = b.showtime_id
        JOIN movies m ON m.id = s.movie_id
-       WHERE b.cancelled_at IS NULL
+       WHERE b.cancelled_at IS NULL${sinceSqlB}
        GROUP BY m.id
        ORDER BY revenue_etb DESC`,
+      ...args,
     );
 
     return {
