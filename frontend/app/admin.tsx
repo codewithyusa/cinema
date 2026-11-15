@@ -17,13 +17,35 @@ type Stats = {
 };
 
 type Hall = { id: number; hall_name: string; cinema_name: string };
-type Tab = 'stats' | 'movie' | 'showtime';
+type AdminMovie = { id: number; title: string; hidden: number };
+type AdminShowtime = {
+  id: number;
+  movie_title: string;
+  cinema_name: string;
+  hall_name: string;
+  starts_at: string;
+  price_etb: number;
+  bookings: number;
+};
+type Tab = 'stats' | 'movie' | 'showtime' | 'manage';
+type Range = 'today' | '7d' | 'all';
 
 const GENRES = ['Action', 'Drama', 'Sci-fi', 'Animation', 'Adventure', 'Comedy', 'Horror', 'Thriller'];
 
+const RANGES: { id: Range; label: string; title: string }[] = [
+  { id: 'today', label: 'Today', title: 'today' },
+  { id: '7d', label: '7 days', title: 'last 7 days' },
+  { id: 'all', label: 'All time', title: 'all time' },
+];
+
 const etb = (n: number) => `${n.toLocaleString()} ETB`;
 
-async function adminCall(key: string, method: 'GET' | 'POST', path: string, body?: object) {
+async function adminCall(
+  key: string,
+  method: 'GET' | 'POST' | 'PATCH' | 'DELETE',
+  path: string,
+  body?: object,
+) {
   const res = await fetch(`${API_URL}${path}`, {
     method,
     headers: { 'x-admin-key': key, 'Content-Type': 'application/json' },
@@ -41,6 +63,12 @@ const errorText = (data: any) => {
 // Tomorrow in cinema time (UTC+3), as YYYY-MM-DD.
 const tomorrow = () => new Date(Date.now() + 27 * 3600 * 1000).toISOString().slice(0, 10);
 
+// A stored UTC time shown as cinema time (UTC+3).
+const when = (iso: string) => {
+  const s = new Date(new Date(iso).getTime() + 3 * 3600 * 1000).toISOString();
+  return `${s.slice(0, 10)} ${s.slice(11, 16)}`;
+};
+
 const EMPTY_MOVIE = { title: '', genre: '', duration: '', rating: '', synopsis: '', poster: '', trailer: '' };
 
 export default function Admin() {
@@ -50,6 +78,7 @@ export default function Admin() {
 
   const [key, setKey] = useState('');
   const [stats, setStats] = useState<Stats | null>(null);
+  const [range, setRange] = useState<Range>('all');
   const [halls, setHalls] = useState<Hall[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -63,28 +92,88 @@ export default function Admin() {
   const [time, setTime] = useState('19:30');
   const [price, setPrice] = useState('250');
 
+  const [adminMovies, setAdminMovies] = useState<AdminMovie[]>([]);
+  const [manageMovieId, setManageMovieId] = useState<number | null>(null);
+  const [showtimes, setShowtimes] = useState<AdminShowtime[]>([]);
+  const [confirmId, setConfirmId] = useState<number | null>(null);
+
   const goBack = () => (router.canGoBack() ? router.back() : router.replace('/profile'));
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError('');
-    try {
-      const r = await adminCall(key, 'GET', '/admin/stats');
-      if (r.status === 401) {
-        setStats(null);
-        setError('Wrong admin key.');
-      } else if (r.status >= 300) {
-        setError('Server error. Try again.');
-      } else {
-        setStats(r.data);
-        const h = await adminCall(key, 'GET', '/admin/halls');
-        if (Array.isArray(h.data)) setHalls(h.data);
+  const load = useCallback(
+    async (r: Range = 'all') => {
+      setLoading(true);
+      setError('');
+      try {
+        const res = await adminCall(key, 'GET', `/admin/stats?range=${r}`);
+        if (res.status === 401) {
+          setStats(null);
+          setError('Wrong admin key.');
+        } else if (res.status >= 300) {
+          setError('Server error. Try again.');
+        } else {
+          setStats(res.data);
+          const h = await adminCall(key, 'GET', '/admin/halls');
+          if (Array.isArray(h.data)) setHalls(h.data);
+        }
+      } catch {
+        setError('Cannot reach the server.');
       }
-    } catch {
-      setError('Cannot reach the server.');
+      setLoading(false);
+    },
+    [key],
+  );
+
+  const pickRange = (r: Range) => {
+    setRange(r);
+    load(r);
+  };
+
+  const loadAdminMovies = async () => {
+    const r = await adminCall(key, 'GET', '/admin/movies');
+    if (Array.isArray(r.data)) setAdminMovies(r.data);
+  };
+
+  const openTab = (t: Tab) => {
+    setTab(t);
+    setNotice(null);
+    setConfirmId(null);
+    if (t === 'manage') loadAdminMovies().catch(() => {});
+  };
+
+  const toggleHidden = async (m: AdminMovie) => {
+    setNotice(null);
+    const r = await adminCall(key, 'PATCH', `/admin/movies/${m.id}/hidden`, { hidden: !m.hidden });
+    if (r.status < 300) {
+      setNotice({ ok: true, text: m.hidden ? `"${m.title}" is visible again.` : `"${m.title}" is hidden from the app.` });
+      await loadAdminMovies();
+      reloadMovies().catch(() => {});
+    } else {
+      setNotice({ ok: false, text: errorText(r.data) });
     }
-    setLoading(false);
-  }, [key]);
+  };
+
+  const loadShowtimes = async (id: number) => {
+    setManageMovieId(id);
+    setConfirmId(null);
+    const r = await adminCall(key, 'GET', `/admin/showtimes?movieId=${id}`);
+    setShowtimes(Array.isArray(r.data) ? r.data : []);
+  };
+
+  const removeShowtime = async (id: number) => {
+    if (confirmId !== id) {
+      setConfirmId(id);
+      return;
+    }
+    setNotice(null);
+    const r = await adminCall(key, 'DELETE', `/admin/showtimes/${id}`);
+    setConfirmId(null);
+    if (r.status < 300) {
+      setNotice({ ok: true, text: 'Showtime deleted.' });
+      if (manageMovieId) await loadShowtimes(manageMovieId);
+    } else {
+      setNotice({ ok: false, text: errorText(r.data) });
+    }
+  };
 
   const addMovie = async () => {
     setNotice(null);
@@ -172,29 +261,38 @@ export default function Admin() {
             style={inputStyle}
           />
           {error ? <Text style={{ color: colors.redText, textAlign: 'center' }}>{error}</Text> : null}
-          <Button label="Open dashboard" onPress={load} loading={loading} disabled={!key} />
+          <Button label="Open dashboard" onPress={() => load(range)} loading={loading} disabled={!key} />
         </View>
       </View>
     );
   }
 
   const top = stats.per_movie[0]?.revenue_etb || 1;
+  const rangeTitle = RANGES.find((r) => r.id === range)?.title ?? '';
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
       {header}
 
-      <View style={{ flexDirection: 'row', gap: 8, paddingHorizontal: 20, paddingTop: 16 }}>
-        <Chip label="Dashboard" active={tab === 'stats'} onPress={() => { setTab('stats'); setNotice(null); }} />
-        <Chip label="Add movie" active={tab === 'movie'} onPress={() => { setTab('movie'); setNotice(null); }} />
-        <Chip label="Add showtime" active={tab === 'showtime'} onPress={() => { setTab('showtime'); setNotice(null); }} />
-      </View>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={{ flexGrow: 0 }}
+        contentContainerStyle={{ gap: 8, paddingHorizontal: 20, paddingTop: 16 }}
+      >
+        <Chip label="Dashboard" active={tab === 'stats'} onPress={() => openTab('stats')} />
+        <Chip label="Add movie" active={tab === 'movie'} onPress={() => openTab('movie')} />
+        <Chip label="Add showtime" active={tab === 'showtime'} onPress={() => openTab('showtime')} />
+        <Chip label="Manage" active={tab === 'manage'} onPress={() => openTab('manage')} />
+      </ScrollView>
 
       <ScrollView
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={{ padding: 20, gap: 14, paddingBottom: insets.bottom + 40 }}
         refreshControl={
-          tab === 'stats' ? <RefreshControl refreshing={loading} onRefresh={load} tintColor={colors.text} /> : undefined
+          tab === 'stats' ? (
+            <RefreshControl refreshing={loading} onRefresh={() => load(range)} tintColor={colors.text} />
+          ) : undefined
         }
       >
         {notice ? (
@@ -213,8 +311,14 @@ export default function Admin() {
 
         {tab === 'stats' ? (
           <>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              {RANGES.map((r) => (
+                <Chip key={r.id} label={r.label} active={range === r.id} onPress={() => pickRange(r.id)} />
+              ))}
+            </View>
+
             <View style={{ backgroundColor: colors.surface, borderRadius: 20, padding: 20, gap: 4 }}>
-              <Text style={{ color: colors.muted, fontSize: 13 }}>Total revenue</Text>
+              <Text style={{ color: colors.muted, fontSize: 13 }}>Revenue ({rangeTitle})</Text>
               <Text style={{ color: colors.text, fontSize: 32, fontWeight: '800' }}>{etb(stats.revenue_etb)}</Text>
             </View>
 
@@ -227,10 +331,10 @@ export default function Admin() {
               <Stat label="Cancelled" value={String(stats.cancelled)} />
             </View>
 
-            <Text style={{ color: colors.text, fontSize: 18, fontWeight: '800', marginTop: 8 }}>Sales by movie</Text>
+            <Text style={sectionStyle}>Sales by movie</Text>
             <View style={{ backgroundColor: colors.surface, borderRadius: 18, padding: 16, gap: 16 }}>
               {stats.per_movie.length === 0 ? (
-                <Text style={{ color: colors.muted, fontSize: 14 }}>No bookings yet.</Text>
+                <Text style={{ color: colors.muted, fontSize: 14 }}>No bookings in this period.</Text>
               ) : (
                 stats.per_movie.map((m) => (
                   <View key={m.movie_id} style={{ gap: 6 }}>
@@ -340,12 +444,92 @@ export default function Admin() {
             <Button label="Add showtime" onPress={addShowtime} loading={loading} />
           </>
         ) : null}
+
+        {tab === 'manage' ? (
+          <>
+            <Text style={sectionStyle}>Movies</Text>
+            <View style={{ backgroundColor: colors.surface, borderRadius: 18, paddingHorizontal: 14 }}>
+              {adminMovies.map((m, i) => (
+                <View
+                  key={m.id}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 10,
+                    minHeight: 54,
+                    borderBottomWidth: i === adminMovies.length - 1 ? 0 : 1,
+                    borderBottomColor: colors.border,
+                  }}
+                >
+                  <Text
+                    style={{ flex: 1, color: m.hidden ? colors.muted : colors.text, fontSize: 14, fontWeight: '700' }}
+                    numberOfLines={1}
+                  >
+                    {m.title}
+                    {m.hidden ? '  (hidden)' : ''}
+                  </Text>
+                  <SmallButton label={m.hidden ? 'Show' : 'Hide'} onPress={() => toggleHidden(m)} />
+                </View>
+              ))}
+            </View>
+
+            <Text style={sectionStyle}>Showtimes</Text>
+            <Text style={labelStyle}>Pick a movie to see its upcoming showtimes</Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+              {adminMovies.map((m) => (
+                <Chip key={m.id} label={m.title} active={manageMovieId === m.id} onPress={() => loadShowtimes(m.id)} />
+              ))}
+            </View>
+
+            {manageMovieId ? (
+              <View style={{ backgroundColor: colors.surface, borderRadius: 18, paddingHorizontal: 14 }}>
+                {showtimes.length === 0 ? (
+                  <Text style={{ color: colors.muted, fontSize: 14, paddingVertical: 16 }}>No upcoming showtimes.</Text>
+                ) : (
+                  showtimes.map((s, i) => (
+                    <View
+                      key={s.id}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 10,
+                        paddingVertical: 12,
+                        borderBottomWidth: i === showtimes.length - 1 ? 0 : 1,
+                        borderBottomColor: colors.border,
+                      }}
+                    >
+                      <View style={{ flex: 1, gap: 2 }}>
+                        <Text style={{ color: colors.text, fontSize: 14, fontWeight: '700' }}>{when(s.starts_at)}</Text>
+                        <Text style={{ color: colors.muted, fontSize: 12 }}>
+                          {s.cinema_name.replace('YUSA Cinema ', '')} · {s.hall_name} · {s.price_etb} ETB
+                        </Text>
+                        {s.bookings > 0 ? (
+                          <Text style={{ color: colors.redText, fontSize: 12, fontWeight: '700' }}>
+                            {s.bookings} booking{s.bookings > 1 ? 's' : ''}
+                          </Text>
+                        ) : null}
+                      </View>
+                      {s.bookings === 0 ? (
+                        <SmallButton
+                          label={confirmId === s.id ? 'Sure?' : 'Delete'}
+                          danger
+                          onPress={() => removeShowtime(s.id)}
+                        />
+                      ) : null}
+                    </View>
+                  ))
+                )}
+              </View>
+            ) : null}
+          </>
+        ) : null}
       </ScrollView>
     </View>
   );
 }
 
 const labelStyle = { color: colors.muted, fontSize: 13, fontWeight: '700' as const };
+const sectionStyle = { color: colors.text, fontSize: 18, fontWeight: '800' as const, marginTop: 8 };
 
 const inputStyle = {
   height: 50,
@@ -431,6 +615,26 @@ function Chip({ label, active, onPress }: { label: string; active: boolean; onPr
       }}
     >
       <Text style={{ color: active ? '#fff' : colors.text, fontSize: 13, fontWeight: '700' }}>{label}</Text>
+    </Pressable>
+  );
+}
+
+function SmallButton({ label, onPress, danger }: { label: string; onPress: () => void; danger?: boolean }) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={{
+        paddingHorizontal: 14,
+        height: 34,
+        borderRadius: 10,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 1,
+        borderColor: danger ? '#EF4444' : colors.border,
+        backgroundColor: colors.bg,
+      }}
+    >
+      <Text style={{ color: danger ? '#EF4444' : colors.text, fontSize: 13, fontWeight: '800' }}>{label}</Text>
     </Pressable>
   );
 }
