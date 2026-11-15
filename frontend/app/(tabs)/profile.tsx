@@ -156,6 +156,7 @@ export default function Profile() {
         <View style={{ backgroundColor: colors.surface, borderRadius: 18, paddingHorizontal: 14 }}>
           <MenuItem icon="ticket-outline" label="My tickets" onPress={() => router.push('/tickets')} />
           <MenuItem icon="notifications-outline" label="Notifications" onPress={() => router.push('/notifications')} />
+          <MenuItem icon="qr-code-outline" label="Ticket scanner" onPress={() => router.push('/scanner')} />
           <MenuItem icon="settings-outline" label="Settings" onPress={() => router.push('/settings')} last />
         </View>
 
