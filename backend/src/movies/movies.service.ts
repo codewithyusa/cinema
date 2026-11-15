@@ -10,6 +10,7 @@ export type Movie = {
   synopsis: string;
   poster_url: string | null;
   trailer_url: string | null;
+  hidden?: number;
 };
 
 // Same 10 movies, in the same order, as the app's movies.ts. The ids must match.
@@ -57,6 +58,11 @@ export class MoviesService {
         trailer_url TEXT
       )
     `);
+    // Older databases do not have this column yet. The error means it already exists.
+    try {
+      this.db.run('ALTER TABLE movies ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0');
+    } catch {}
+
     // Fill the table once, only when it is empty.
     const count = this.db.get<{ n: number }>('SELECT COUNT(*) AS n FROM movies');
     if (!count || count.n === 0) {
@@ -81,10 +87,16 @@ export class MoviesService {
     }
   }
 
+  // Public list: hidden movies are left out.
   list(genre?: string): Movie[] {
     if (genre) {
-      return this.db.all<Movie>('SELECT * FROM movies WHERE genre = ? ORDER BY id', genre);
+      return this.db.all<Movie>('SELECT * FROM movies WHERE hidden = 0 AND genre = ? ORDER BY id', genre);
     }
+    return this.db.all<Movie>('SELECT * FROM movies WHERE hidden = 0 ORDER BY id');
+  }
+
+  // Admin: every movie, including hidden ones.
+  adminList(): Movie[] {
     return this.db.all<Movie>('SELECT * FROM movies ORDER BY id');
   }
 
@@ -92,6 +104,13 @@ export class MoviesService {
     const movie = this.db.get<Movie>('SELECT * FROM movies WHERE id = ?', id);
     if (!movie) throw new NotFoundException('Movie not found.');
     return movie;
+  }
+
+  // Admin: hides or shows a movie in the app.
+  setHidden(id: number, hidden: boolean): Movie {
+    this.get(id);
+    this.db.run('UPDATE movies SET hidden = ? WHERE id = ?', hidden ? 1 : 0, id);
+    return this.get(id);
   }
 
   // Admin: adds a new movie. Its id continues after the 10 seeded ones.
