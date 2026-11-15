@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from '../db/database.service';
 
 export type Cinema = { id: number; name: string; address: string };
@@ -160,5 +160,54 @@ export class CinemasService {
     const showtime = this.db.get<Showtime>(`${SHOWTIME_SELECT} WHERE s.id = ?`, id);
     if (!showtime) throw new NotFoundException('Showtime not found.');
     return showtime;
+  }
+
+  // Admin: all halls with their cinema, for the "add showtime" picker.
+  listHalls() {
+    return this.db.all<{ id: number; hall_name: string; cinema_name: string }>(
+      `SELECT h.id, h.name AS hall_name, c.name AS cinema_name
+       FROM halls h
+       JOIN cinemas c ON c.id = h.cinema_id
+       ORDER BY c.id, h.id`,
+    );
+  }
+
+  // Admin: adds one showtime. Date and time are cinema time (UTC+3).
+  createShowtime(movieId: number, hallId: number, date: string, time: string, priceEtb: number): Showtime {
+    if (!this.db.get('SELECT id FROM movies WHERE id = ?', movieId)) {
+      throw new NotFoundException('Movie not found.');
+    }
+    if (!this.db.get('SELECT id FROM halls WHERE id = ?', hallId)) {
+      throw new NotFoundException('Hall not found.');
+    }
+
+    const d = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
+    const t = /^(\d{2}):(\d{2})$/.exec(time);
+    if (!d || !t || +t[1] > 23 || +t[2] > 59) {
+      throw new BadRequestException('Use date YYYY-MM-DD and time HH:MM.');
+    }
+    const day = new Date(Date.UTC(+d[1], +d[2] - 1, +d[3]));
+    if (day.getUTCMonth() !== +d[2] - 1 || day.getUTCDate() !== +d[3]) {
+      throw new BadRequestException('That date does not exist.');
+    }
+
+    const start = new Date(Date.UTC(+d[1], +d[2] - 1, +d[3], +t[1] - 3, +t[2]));
+    if (start.getTime() <= Date.now()) {
+      throw new BadRequestException('The showtime must be in the future.');
+    }
+    if (!Number.isInteger(priceEtb) || priceEtb < 50 || priceEtb > 2000) {
+      throw new BadRequestException('Price must be 50 to 2000 ETB.');
+    }
+
+    const startsAt = start.toISOString();
+    if (this.db.get('SELECT id FROM showtimes WHERE hall_id = ? AND starts_at = ?', hallId, startsAt)) {
+      throw new ConflictException('This hall already has a showtime at that time.');
+    }
+
+    const result = this.db.run(
+      'INSERT INTO showtimes (movie_id, hall_id, starts_at, price_etb) VALUES (?, ?, ?, ?)',
+      movieId, hallId, startsAt, priceEtb,
+    );
+    return this.getShowtime(Number(result.lastInsertRowid));
   }
 }
