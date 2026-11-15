@@ -42,20 +42,23 @@ async function loadMovies(): Promise<MovieWithTrailer[]> {
   const list = await request<ServerMovie[]>('/movies');
   if (!Array.isArray(list)) return localMovies;
 
-  // Local movies get the server's fields (the ids match).
-  const merged = localMovies.map((local): MovieWithTrailer => {
-    const s = list.find((m) => String(m.id) === local.id);
-    if (!s) return local;
-    return {
-      ...local,
-      title: s.title,
-      genre: s.genre,
-      duration: formatDuration(s.duration_min),
-      rating: s.rating,
-      synopsis: s.synopsis,
-      trailer_url: s.trailer_url,
-    };
-  });
+  // Local movies get the server's fields (the ids match). A local movie the
+  // server does not list is hidden by the admin, so it is left out.
+  const merged = localMovies
+    .filter((local) => list.some((m) => String(m.id) === local.id))
+    .map((local): MovieWithTrailer => {
+      const s = list.find((m) => String(m.id) === local.id);
+      if (!s) return local;
+      return {
+        ...local,
+        title: s.title,
+        genre: s.genre,
+        duration: formatDuration(s.duration_min),
+        rating: s.rating,
+        synopsis: s.synopsis,
+        trailer_url: s.trailer_url,
+      };
+    });
 
   // Movies that exist only on the server (added in Admin) come after them.
   const localIds = new Set(localMovies.map((m) => m.id));
@@ -78,7 +81,7 @@ function fetchAll() {
   return inflight;
 }
 
-// Forces a fresh load, for example right after a movie was added in Admin.
+// Forces a fresh load, for example right after a movie was added or hidden in Admin.
 export function reloadMovies() {
   inflight = null;
   return fetchAll();
