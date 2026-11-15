@@ -141,8 +141,9 @@ export class CinemasService {
     return this.db.all<Cinema>('SELECT * FROM cinemas ORDER BY id');
   }
 
+  // Public list: showtimes of hidden movies are left out.
   listShowtimes(movieId?: number, cinemaId?: number): Showtime[] {
-    let sql = `${SHOWTIME_SELECT} WHERE s.starts_at > ?`;
+    let sql = `${SHOWTIME_SELECT} WHERE s.starts_at > ? AND m.hidden = 0`;
     const params: (string | number)[] = [new Date().toISOString()];
     if (movieId) {
       sql += ' AND s.movie_id = ?';
@@ -156,6 +157,7 @@ export class CinemasService {
     return this.db.all<Showtime>(sql, ...params);
   }
 
+  // Not filtered by hidden, so tickets of a hidden movie still work.
   getShowtime(id: number): Showtime {
     const showtime = this.db.get<Showtime>(`${SHOWTIME_SELECT} WHERE s.id = ?`, id);
     if (!showtime) throw new NotFoundException('Showtime not found.');
@@ -209,5 +211,50 @@ export class CinemasService {
       movieId, hallId, startsAt, priceEtb,
     );
     return this.getShowtime(Number(result.lastInsertRowid));
+  }
+
+  // Admin: upcoming showtimes of one movie, with the number of active bookings.
+  adminShowtimes(movieId: number) {
+    if (!Number.isInteger(movieId)) return [];
+    return this.db.all<{
+      id: number;
+      movie_title: string;
+      cinema_name: string;
+      hall_name: string;
+      starts_at: string;
+      price_etb: number;
+      bookings: number;
+    }>(
+      `SELECT s.id, m.title AS movie_title, c.name AS cinema_name, h.name AS hall_name,
+              s.starts_at, s.price_etb,
+              (SELECT COUNT(*) FROM bookings b
+                WHERE b.showtime_id = s.id AND b.cancelled_at IS NULL) AS bookings
+       FROM showtimes s
+       JOIN movies m ON m.id = s.movie_id
+       JOIN halls h ON h.id = s.hall_id
+       JOIN cinemas c ON c.id = h.cinema_id
+       WHERE s.movie_id = ? AND s.starts_at > ?
+       ORDER BY s.starts_at
+       LIMIT 100`,
+      movieId,
+      new Date().toISOString(),
+    );
+  }
+
+  // Admin: deletes a showtime that has no active bookings.
+  deleteShowtime(id: number) {
+    if (!this.db.get('SELECT id FROM showtimes WHERE id = ?', id)) {
+      throw new NotFoundException('Showtime not found.');
+    }
+    const active = this.db.get<{ n: number }>(
+      'SELECT COUNT(*) AS n FROM bookings WHERE showtime_id = ? AND cancelled_at IS NULL',
+      id,
+    );
+    if (active && active.n > 0) {
+      throw new ConflictException('This showtime has bookings, so it cannot be deleted.');
+    }
+    this.db.run('DELETE FROM seat_holds WHERE showtime_id = ?', id);
+    this.db.run('DELETE FROM showtimes WHERE id = ?', id);
+    return { deleted: true, id };
   }
 }
