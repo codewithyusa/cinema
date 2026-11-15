@@ -17,6 +17,7 @@ type BookingRow = {
   paid: number;
   created_at: string;
   cancelled_at: string | null;
+  used_at: string | null;
 };
 
 const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -40,9 +41,12 @@ export class BookingsService {
         created_at TEXT NOT NULL DEFAULT (datetime('now'))
       )
     `);
-    // Older databases do not have this column yet. The error means it already exists.
+    // Older databases do not have these columns yet. The error means they already exist.
     try {
       this.db.run('ALTER TABLE bookings ADD COLUMN cancelled_at TEXT');
+    } catch {}
+    try {
+      this.db.run('ALTER TABLE bookings ADD COLUMN used_at TEXT');
     } catch {}
   }
 
@@ -187,5 +191,23 @@ export class BookingsService {
       throw e;
     }
     return { cancelled: true, code };
+  }
+
+  // Staff scan: marks the ticket as used once. A second scan returns "used".
+  verify(rawCode: string) {
+    const code = rawCode.trim().toUpperCase();
+    const row = this.db.get<BookingRow>('SELECT * FROM bookings WHERE code = ?', code);
+    if (!row) return { status: 'invalid' as const };
+
+    const ticket = this.present(row);
+    if (row.cancelled_at) return { status: 'cancelled' as const, ticket };
+    if (row.used_at) return { status: 'used' as const, used_at: row.used_at, ticket };
+
+    this.db.run(
+      'UPDATE bookings SET used_at = ? WHERE id = ? AND used_at IS NULL',
+      new Date().toISOString(),
+      row.id,
+    );
+    return { status: 'valid' as const, ticket };
   }
 }
